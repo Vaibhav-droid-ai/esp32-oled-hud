@@ -1,0 +1,2886 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OLED128x64 // ESP32 Monochrome Bitmap &amp; HUD Sensor Utility</title>
+  <meta name="description" content="Client-side 128x64 pixel monochrome bitmap converter and custom sensor HUD designer for ESP32 SSD1306 and SH1106 OLED displays." />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='3' fill='%230B0D10' stroke='%2300E5FF' stroke-width='2'/%3E%3Crect x='5' y='8' width='22' height='16' fill='%2312161B' stroke='%23334155' stroke-width='1'/%3E%3Crect x='7' y='10' width='4' height='4' fill='%2300E5FF'/%3E%3Crect x='13' y='10' width='4' height='4' fill='%2300E5FF'/%3E%3Crect x='19' y='14' width='6' height='4' fill='%2300E5FF'/%3E%3Crect x='7' y='18' width='10' height='2' fill='%2300E5FF'/%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+            mono: ['IBM Plex Mono', 'monospace'],
+          },
+          colors: {
+            chassis: {
+              950: '#090B0E',
+              900: '#0E1217',
+              800: '#151B23',
+              700: '#1E2631',
+              600: '#2B3646',
+              500: '#3E4C63',
+            },
+            oled: {
+              cyan: '#00E5FF',
+              cyanDim: '#008899',
+              amber: '#FFB000',
+              white: '#F1F5F9',
+              green: '#10B981',
+            }
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    * {
+      box-sizing: border-box;
+      border-radius: 0px;
+    }
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background-color: #090B0E;
+      color: #E2E8F0;
+      margin: 0;
+      padding: 0;
+      overflow-x: hidden;
+    }
+    .tech-panel {
+      background-color: #0E1217;
+      border: 1px solid #1E2631;
+      border-radius: 3px;
+    }
+    .tech-input {
+      background-color: #090B0E;
+      border: 1px solid #2B3646;
+      color: #F1F5F9;
+      border-radius: 2px;
+      padding: 6px 10px;
+      font-size: 13px;
+      font-family: 'IBM Plex Mono', monospace;
+    }
+    .tech-input:focus {
+      outline: none;
+      border-color: #00E5FF;
+    }
+    .tech-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      border-radius: 2px;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 7px 12px;
+      border: 1px solid #2B3646;
+      background-color: #151B23;
+      color: #E2E8F0;
+      cursor: pointer;
+      transition: background-color 0.1s ease, border-color 0.1s ease;
+    }
+    .tech-btn:hover {
+      background-color: #1E2631;
+      border-color: #3E4C63;
+    }
+    .tech-btn:active {
+      background-color: #2B3646;
+    }
+    .tech-btn-primary {
+      background-color: #00E5FF;
+      color: #090B0E;
+      border-color: #00E5FF;
+      font-weight: 600;
+    }
+    .tech-btn-primary:hover {
+      background-color: #33ECFF;
+      border-color: #33ECFF;
+    }
+    .tech-btn-active {
+      background-color: #132A32;
+      border-color: #00E5FF;
+      color: #00E5FF;
+    }
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 5px;
+      background: #1E2631;
+      border-radius: 2px;
+      outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 2px;
+      background: #00E5FF;
+      cursor: pointer;
+      border: 1px solid #090B0E;
+    }
+    input[type="range"]::-moz-range-thumb {
+      width: 14px;
+      height: 14px;
+      border-radius: 2px;
+      background: #00E5FF;
+      cursor: pointer;
+      border: 1px solid #090B0E;
+    }
+    .oled-screen-frame {
+      background: #050709;
+      border: 2px solid #2B3646;
+      border-radius: 3px;
+      box-shadow: inset 0 0 18px rgba(0,0,0,0.85);
+    }
+    .code-scroll::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    .code-scroll::-webkit-scrollbar-track {
+      background: #090B0E;
+    }
+    .code-scroll::-webkit-scrollbar-thumb {
+      background: #2B3646;
+      border-radius: 2px;
+    }
+    .code-scroll::-webkit-scrollbar-thumb:hover {
+      background: #3E4C63;
+    }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 1px;
+      display: inline-block;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col bg-chassis-950 text-slate-200 selection:bg-oled-cyan selection:text-chassis-950">
+
+  <!-- TOP HARDWARE NAVIGATION BAR -->
+  <header class="border-b border-chassis-700 bg-chassis-900 sticky top-0 z-30">
+    <div class="max-w-[1440px] mx-auto px-4 py-2.5 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <button id="brandHomeBtn" type="button" class="flex items-center gap-2.5 text-left focus:outline-none">
+          <div class="w-7 h-7 bg-chassis-950 border border-oled-cyan flex items-center justify-center">
+            <svg class="w-4 h-4 text-oled-cyan" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="2" y="5" width="20" height="14" />
+              <path d="M6 9h4v3H6zM14 9h4M14 13h4M6 15h6" />
+            </svg>
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="font-mono font-semibold text-sm tracking-tight text-white">OLED128x64</span>
+              <span class="font-mono text-[10px] px-1.5 py-0.5 bg-chassis-800 border border-chassis-600 text-oled-cyan">SSD1306 / SH1106</span>
+            </div>
+            <p class="text-[11px] text-slate-400 font-mono">ESP32 Bitmap Converter &amp; Dynamic Sensor HUD Designer</p>
+          </div>
+        </button>
+      </div>
+
+      <!-- Main Navigation Tabs -->
+      <nav class="flex flex-wrap items-center gap-1.5" aria-label="Main Navigation">
+        <button type="button" data-nav="workbench" class="nav-tab tech-btn tech-btn-active font-mono">
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18"/><path d="M3 9h18M9 21V9"/></svg>
+          Converter Workbench
+        </button>
+        <button type="button" data-nav="hud" class="nav-tab tech-btn font-mono">
+          <svg class="w-3.5 h-3.5 text-oled-cyan" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          HUD &amp; Sensor Designer
+        </button>
+        <button type="button" data-nav="wiring" class="nav-tab tech-btn font-mono">
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/></svg>
+          ESP32 Wiring &amp; Specs
+        </button>
+        <button type="button" data-nav="deploy" class="nav-tab tech-btn font-mono">
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9"/></svg>
+          Deploy &amp; Launch Checklist
+        </button>
+        <button type="button" data-nav="privacy" class="nav-tab tech-btn font-mono">
+          Privacy Policy
+        </button>
+        <button type="button" data-nav="terms" class="nav-tab tech-btn font-mono">
+          Terms &amp; Conditions
+        </button>
+      </nav>
+
+      <!-- Hardware Specs Readout Pill-Free Bar -->
+      <div class="hidden xl:flex items-center gap-3 font-mono text-[11px] bg-chassis-950 border border-chassis-700 px-3 py-1.5">
+        <span class="text-slate-400">TARGET: <strong class="text-white">128x64 px</strong></span>
+        <span class="text-chassis-600">|</span>
+        <span class="text-slate-400">VRAM: <strong class="text-oled-cyan">1,024 Bytes</strong></span>
+        <span class="text-chassis-600">|</span>
+        <span class="text-slate-400">PROCESSING: <strong class="text-emerald-400">LOCAL BROWSER</strong></span>
+      </div>
+    </div>
+  </header>
+
+  <!-- NOTIFICATION TOAST BAR -->
+  <div id="toastBanner" class="hidden fixed bottom-4 right-4 z-50 bg-chassis-800 border border-oled-cyan text-white px-4 py-2.5 shadow-lg font-mono text-xs flex items-center gap-2.5">
+    <span class="status-dot bg-oled-cyan"></span>
+    <span id="toastMessage">Action completed.</span>
+  </div>
+
+  <!-- ========================================================= -->
+  <!-- VIEW 1: CONVERTER WORKBENCH (IMAGE CONVERTER)             -->
+  <!-- ========================================================= -->
+  <main id="view-workbench" class="flex-1 max-w-[1440px] w-full mx-auto px-4 py-4 space-y-4">
+
+    <!-- Technical Specification Banner -->
+    <section class="tech-panel p-3.5 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+      <div>
+        <h1 class="text-base sm:text-lg font-semibold text-white tracking-tight">
+          Convert Any Image to a 128x64 Monochrome OLED Framebuffer &amp; ESP32 PROGMEM C Array
+        </h1>
+        <p class="text-xs text-slate-400 mt-0.5">
+          Upload a PNG, JPG, WebP, BMP, or SVG of any dimension. Resample with aspect-ratio control, apply error-diffusion or ordered dithering, touch up individual pixels, and export directly for <code class="text-oled-cyan font-mono">Adafruit_SSD1306</code>, <code class="text-oled-cyan font-mono">U8g2</code>, or raw ESP-IDF GDDRAM pages.
+        </p>
+      </div>
+      <div class="flex flex-wrap items-center gap-2 shrink-0">
+        <label for="fileUploadInput" class="tech-btn tech-btn-primary cursor-pointer font-mono">
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+          Upload Source Image
+        </label>
+        <input id="fileUploadInput" type="file" accept="image/*" class="hidden" />
+        <button id="exportHeaderBtnTop" type="button" class="tech-btn font-mono">
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 15V3m0 12l-4-4m4 4l4-4M2 17l.621 2.485A2 2 0 004.561 21h14.878a2 2 0 001.94-1.515L22 17"/></svg>
+          Download .h Header
+        </button>
+        <button id="exportPngBtnTop" type="button" class="tech-btn font-mono">
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+          Save 128x64 PNG
+        </button>
+      </div>
+    </section>
+
+    <!-- 3-Column Workbench Layout -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+
+      <!-- LEFT COLUMN (4 cols): Source Image, Presets & Image Conditioning -->
+      <div class="lg:col-span-4 space-y-4">
+
+        <!-- 1. Source Input & Dropzone -->
+        <section class="tech-panel p-3.5 space-y-3">
+          <div class="flex items-center justify-between border-b border-chassis-700 pb-2">
+            <h2 class="font-mono text-xs font-semibold uppercase tracking-wider text-slate-300">01 // Source Input</h2>
+            <span id="sourceDimensionsBadge" class="font-mono text-[11px] text-oled-cyan">Preset: 256x128 px</span>
+          </div>
+
+          <!-- Drag and Drop Area -->
+          <div id="dropZone" class="border border-dashed border-chassis-600 bg-chassis-950 p-3 text-center cursor-pointer hover:border-oled-cyan transition-colors">
+            <div class="flex items-center justify-center gap-3">
+              <div class="w-20 h-12 bg-chassis-900 border border-chassis-700 flex items-center justify-center overflow-hidden shrink-0">
+                <canvas id="sourceThumbCanvas" width="128" height="64" class="max-w-full max-h-full object-contain"></canvas>
+              </div>
+              <div class="text-left flex-1 min-w-0">
+                <p id="sourceFileName" class="font-mono text-xs text-white truncate">esp32_telemetry_hud.pattern</p>
+                <p class="text-[11px] text-slate-400 mt-0.5">Drop image here, click to browse, or press Ctrl+V to paste from clipboard.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Deterministic Hardware Test Patterns -->
+          <div>
+            <label class="block font-mono text-[11px] text-slate-400 mb-1.5">LOAD BUILT-IN HARDWARE TEST PATTERN:</label>
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+              <button type="button" data-preset="telemetry" class="preset-btn tech-btn tech-btn-active font-mono text-[11px] py-1.5">Telemetry HUD</button>
+              <button type="button" data-preset="calibration" class="preset-btn tech-btn font-mono text-[11px] py-1.5">ANSI Grid</button>
+              <button type="button" data-preset="scope" class="preset-btn tech-btn font-mono text-[11px] py-1.5">Oscilloscope</button>
+              <button type="button" data-preset="chip" class="preset-btn tech-btn font-mono text-[11px] py-1.5">ESP32 Pinout</button>
+              <button type="button" data-preset="weather" class="preset-btn tech-btn font-mono text-[11px] py-1.5">Sensor Node</button>
+              <button type="button" data-preset="halftone" class="preset-btn tech-btn font-mono text-[11px] py-1.5">Dither Ramp</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- 2. Geometry & Scaling Pipeline -->
+        <section class="tech-panel p-3.5 space-y-3">
+          <div class="flex items-center justify-between border-b border-chassis-700 pb-2">
+            <h2 class="font-mono text-xs font-semibold uppercase tracking-wider text-slate-300">02 // Geometry &amp; Resampling (to 128x64)</h2>
+            <button id="resetGeometryBtn" type="button" class="font-mono text-[11px] text-slate-400 hover:text-oled-cyan">Reset</button>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label for="scaleModeSelect" class="block font-mono text-[11px] text-slate-400 mb-1">FIT / ASPECT MODE</label>
+              <select id="scaleModeSelect" class="tech-input w-full">
+                <option value="contain">Contain (Letterbox)</option>
+                <option value="cover">Cover (Center Crop)</option>
+                <option value="stretch">Stretch (Exact 128x64)</option>
+                <option value="center">1:1 Pixel Center</option>
+              </select>
+            </div>
+            <div>
+              <label for="bgFillSelect" class="block font-mono text-[11px] text-slate-400 mb-1">MATTE / PADDING FILL</label>
+              <select id="bgFillSelect" class="tech-input w-full">
+                <option value="black">Black (0x00 / Off)</option>
+                <option value="white">White (0xFF / On)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-1.5 pt-1">
+            <button id="flipHBtn" type="button" class="tech-btn flex-1 font-mono text-[11px]">Flip H</button>
+            <button id="flipVBtn" type="button" class="tech-btn flex-1 font-mono text-[11px]">Flip V</button>
+            <button id="rotate90Btn" type="button" class="tech-btn flex-1 font-mono text-[11px]">Rotate 90°</button>
+            <button id="invertBtn" type="button" class="tech-btn flex-1 font-mono text-[11px]">Invert Bits</button>
+          </div>
+        </section>
+
+        <!-- 3. Dithering & Threshold Pipeline -->
+        <section class="tech-panel p-3.5 space-y-3">
+          <div class="flex items-center justify-between border-b border-chassis-700 pb-2">
+            <h2 class="font-mono text-xs font-semibold uppercase tracking-wider text-slate-300">03 // 1-Bit Quantization &amp; Dither</h2>
+            <button id="resetDitherBtn" type="button" class="font-mono text-[11px] text-slate-400 hover:text-oled-cyan">Reset</button>
+          </div>
+
+          <div>
+            <label for="ditherAlgoSelect" class="block font-mono text-[11px] text-slate-400 mb-1">QUANTIZATION ALGORITHM</label>
+            <select id="ditherAlgoSelect" class="tech-input w-full">
+              <option value="threshold">Binary Threshold (Sharp Graphics / Icons)</option>
+              <option value="floyd">Floyd-Steinberg Error Diffusion (Photos)</option>
+              <option value="atkinson">Atkinson Dithering (High-Contrast Crisp)</option>
+              <option value="bayer4">Bayer 4x4 Ordered Matrix (Retro Halftone)</option>
+              <option value="bayer8">Bayer 8x8 Ordered Matrix (Fine Halftone)</option>
+            </select>
+          </div>
+
+          <!-- Threshold Slider -->
+          <div>
+            <div class="flex justify-between font-mono text-[11px] mb-1">
+              <label for="thresholdRange" class="text-slate-400">LUMA CUTOFF THRESHOLD</label>
+              <span id="thresholdVal" class="text-oled-cyan">128</span>
+            </div>
+            <input id="thresholdRange" type="range" min="1" max="254" value="128" />
+          </div>
+
+          <!-- Brightness Slider -->
+          <div>
+            <div class="flex justify-between font-mono text-[11px] mb-1">
+              <label for="brightnessRange" class="text-slate-400">BRIGHTNESS OFFSET</label>
+              <span id="brightnessVal" class="text-oled-cyan">0</span>
+            </div>
+            <input id="brightnessRange" type="range" min="-100" max="100" value="0" />
+          </div>
+
+          <!-- Contrast Slider -->
+          <div>
+            <div class="flex justify-between font-mono text-[11px] mb-1">
+              <label for="contrastRange" class="text-slate-400">CONTRAST GAIN</label>
+              <span id="contrastVal" class="text-oled-cyan">0</span>
+            </div>
+            <input id="contrastRange" type="range" min="-100" max="100" value="0" />
+          </div>
+        </section>
+
+      </div>
+
+      <!-- CENTER COLUMN (8 cols): Interactive 128x64 OLED Display Simulator + C Code Output -->
+      <div class="lg:col-span-8 space-y-4">
+
+        <!-- Interactive 128x64 SSD1306 Hardware Simulator & Pixel Editor -->
+        <section class="tech-panel p-3.5 space-y-3">
+          <div class="flex flex-wrap items-center justify-between gap-2 border-b border-chassis-700 pb-2.5">
+            <div class="flex items-center gap-2">
+              <h2 class="font-mono text-xs font-semibold uppercase tracking-wider text-slate-300">04 // Interactive 128x64 OLED Matrix Simulator</h2>
+              <span class="font-mono text-[11px] px-1.5 py-0.5 bg-chassis-950 border border-chassis-700 text-slate-400">SSD1306 GDDRAM: 8 Pages x 128 Segments</span>
+            </div>
+
+            <!-- OLED Phosphor Color Selector -->
+            <div class="flex items-center gap-1.5">
+              <span class="font-mono text-[11px] text-slate-400">PANEL COLOR:</span>
+              <button type="button" data-color="cyan" class="color-mode-btn tech-btn tech-btn-active font-mono text-[11px] py-1 px-2">Cyan</button>
+              <button type="button" data-color="white" class="color-mode-btn tech-btn font-mono text-[11px] py-1 px-2">White</button>
+              <button type="button" data-color="dual" class="color-mode-btn tech-btn font-mono text-[11px] py-1 px-2">Yellow/Blue</button>
+              <button type="button" data-color="amber" class="color-mode-btn tech-btn font-mono text-[11px] py-1 px-2">Amber</button>
+            </div>
+          </div>
+
+          <!-- Pixel Drawing Toolbar -->
+          <div class="flex flex-wrap items-center justify-between gap-2 bg-chassis-950 border border-chassis-700 p-2">
+            <div class="flex flex-wrap items-center gap-1.5">
+              <span class="font-mono text-[11px] text-slate-400 mr-1">PIXEL TOOL:</span>
+              <button type="button" data-tool="draw" class="draw-tool-btn tech-btn tech-btn-active font-mono text-[11px] py-1 px-2.5">
+                Pencil (Set 1)
+              </button>
+              <button type="button" data-tool="erase" class="draw-tool-btn tech-btn font-mono text-[11px] py-1 px-2.5">
+                Eraser (Set 0)
+              </button>
+              <button type="button" data-tool="line" class="draw-tool-btn tech-btn font-mono text-[11px] py-1 px-2.5">
+                Line
+              </button>
+              <button type="button" data-tool="rect" class="draw-tool-btn tech-btn font-mono text-[11px] py-1 px-2.5">
+                Box
+              </button>
+              <button id="undoPixelBtn" type="button" class="tech-btn font-mono text-[11px] py-1 px-2.5" title="Undo pixel edit">
+                Undo
+              </button>
+              <button id="clearScreenBtn" type="button" class="tech-btn font-mono text-[11px] py-1 px-2.5 text-amber-400">
+                Clear All
+              </button>
+            </div>
+
+            <div class="flex items-center gap-3">
+              <label class="flex items-center gap-1.5 font-mono text-[11px] text-slate-300 cursor-pointer">
+                <input id="gridLinesToggle" type="checkbox" checked class="accent-oled-cyan" />
+                Pixel Pitch Grid
+              </label>
+              <label class="flex items-center gap-1.5 font-mono text-[11px] text-slate-300 cursor-pointer">
+                <input id="pageGuidesToggle" type="checkbox" class="accent-oled-cyan" />
+                8-Bit Page Guides
+              </label>
+            </div>
+          </div>
+
+          <!-- Zoomed 128x64 Interactive Canvas Container -->
+          <div class="oled-screen-frame p-3 flex flex-col items-center justify-center relative overflow-x-auto">
+            <canvas id="oledInteractiveCanvas" width="768" height="384" class="w-full max-w-[768px] h-auto cursor-crosshair block border border-chassis-700"></canvas>
+          </div>
+
+          <!-- Real-Time Hardware Telemetry Footer Bar -->
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 font-mono text-[11px]">
+            <div class="bg-chassis-950 border border-chassis-700 px-2.5 py-1.5 flex justify-between">
+              <span class="text-slate-400">CURSOR (X,Y):</span>
+              <span id="cursorCoordReadout" class="text-white">-- , --</span>
+            </div>
+            <div class="bg-chassis-950 border border-chassis-700 px-2.5 py-1.5 flex justify-between">
+              <span class="text-slate-400">BYTE / PAGE:</span>
+              <span id="cursorByteReadout" class="text-oled-cyan">--</span>
+            </div>
+            <div class="bg-chassis-950 border border-chassis-700 px-2.5 py-1.5 flex justify-between">
+              <span class="text-slate-400">ACTIVE PIXELS:</span>
+              <span id="litPixelCountReadout" class="text-white">0 / 8192 (0%)</span>
+            </div>
+            <div class="bg-chassis-950 border border-chassis-700 px-2.5 py-1.5 flex justify-between">
+              <span class="text-slate-400">EST. CURRENT:</span>
+              <span id="currentDrawReadout" class="text-emerald-400">~2.1 mA</span>
+            </div>
+          </div>
+
+          <!-- Physical 1:1 Scale Reference + Multi-Frame Animation Buffer -->
+          <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-1 border-t border-chassis-800">
+            <div class="flex items-center gap-3">
+              <div class="p-1.5 bg-chassis-950 border border-chassis-700 inline-block">
+                <canvas id="oledActualSizeCanvas" width="128" height="64" class="block"></canvas>
+              </div>
+              <div class="text-xs">
+                <div class="font-mono font-semibold text-slate-200">1:1 Native Resolution Preview (128x64 px)</div>
+                <p class="text-[11px] text-slate-400">Matches physical pixel density on a 0.96-inch I2C/SPI OLED module.</p>
+              </div>
+            </div>
+
+            <!-- Multi-Frame Sprite / Animation Queue Controls -->
+            <div class="flex flex-wrap items-center gap-1.5">
+              <button id="addFrameBtn" type="button" class="tech-btn font-mono text-[11px]">
+                + Add Frame to Queue (<span id="frameQueueCount">0</span>)
+              </button>
+              <button id="clearFramesBtn" type="button" class="tech-btn font-mono text-[11px]">
+                Clear Queue
+              </button>
+            </div>
+          </div>
+          <div id="frameQueueStrip" class="hidden bg-chassis-950 border border-chassis-700 p-2 flex flex-wrap items-center gap-2"></div>
+        </section>
+
+        <!-- 5. ESP32 C/C++ PROGMEM Code Generator & Output -->
+        <section class="tech-panel p-3.5 space-y-3">
+          <div class="flex flex-wrap items-center justify-between gap-2 border-b border-chassis-700 pb-2.5">
+            <div>
+              <h2 class="font-mono text-xs font-semibold uppercase tracking-wider text-slate-300">05 // ESP32 C/C++ Code Output (1,024 Bytes / Frame)</h2>
+            </div>
+            <div class="flex flex-wrap items-center gap-1.5">
+              <button type="button" data-codetab="header" class="code-tab-btn tech-btn tech-btn-active font-mono text-[11px] py-1 px-2.5">
+                C Byte Array (.h)
+              </button>
+              <button type="button" data-codetab="sketch" class="code-tab-btn tech-btn font-mono text-[11px] py-1 px-2.5">
+                Full ESP32 Sketch (.ino)
+              </button>
+            </div>
+          </div>
+
+          <!-- Code Formatting Configuration Bar -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+            <div>
+              <label for="driverFormatSelect" class="block font-mono text-[11px] text-slate-400 mb-1">TARGET LIBRARY / DRIVER</label>
+              <select id="driverFormatSelect" class="tech-input w-full">
+                <option value="adafruit">Adafruit_SSD1306 (Horizontal, MSB)</option>
+                <option value="u8g2">U8g2 / XBM (Horizontal, LSB)</option>
+                <option value="espidf">ESP-IDF GDDRAM Pages (Vertical)</option>
+                <option value="custom">Custom Scan / Endianness</option>
+              </select>
+            </div>
+            <div>
+              <label for="scanModeSelect" class="block font-mono text-[11px] text-slate-400 mb-1">BYTE ADDRESSING MODE</label>
+              <select id="scanModeSelect" class="tech-input w-full">
+                <option value="horizontal">Horizontal (16 Bytes / Row)</option>
+                <option value="vertical">Vertical Page (128 Bytes / Page)</option>
+              </select>
+            </div>
+            <div>
+              <label for="bitOrderSelect" class="block font-mono text-[11px] text-slate-400 mb-1">BIT ENDIANNESS</label>
+              <select id="bitOrderSelect" class="tech-input w-full">
+                <option value="msb">MSB First (Bit 7 = Leftmost)</option>
+                <option value="lsb">LSB First (Bit 0 = Leftmost / XBM)</option>
+              </select>
+            </div>
+            <div>
+              <label for="arrayNameInput" class="block font-mono text-[11px] text-slate-400 mb-1">C IDENTIFIER NAME</label>
+              <input id="arrayNameInput" type="text" value="oled_frame_128x64" class="tech-input w-full" />
+            </div>
+          </div>
+
+          <!-- Sketch Hardware Options -->
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 bg-chassis-950 border border-chassis-800 p-2.5">
+            <div>
+              <label for="espSdaInput" class="block font-mono text-[10px] text-slate-400 mb-1">ESP32 I2C SDA GPIO</label>
+              <input id="espSdaInput" type="number" min="0" max="48" value="21" class="tech-input w-full py-1" />
+            </div>
+            <div>
+              <label for="espSclInput" class="block font-mono text-[10px] text-slate-400 mb-1">ESP32 I2C SCL GPIO</label>
+              <input id="espSclInput" type="number" min="0" max="48" value="22" class="tech-input w-full py-1" />
+            </div>
+            <div>
+              <label for="i2cAddrSelect" class="block font-mono text-[10px] text-slate-400 mb-1">OLED I2C ADDRESS</label>
+              <select id="i2cAddrSelect" class="tech-input w-full py-1">
+                <option value="0x3C">0x3C (Default 128x64)</option>
+                <option value="0x3D">0x3D (Alt Jumper)</option>
+              </select>
+            </div>
+            <div>
+              <label for="byteRadixSelect" class="block font-mono text-[10px] text-slate-400 mb-1">NUMBER LITERAL FORMAT</label>
+              <select id="byteRadixSelect" class="tech-input w-full py-1">
+                <option value="hex">Hexadecimal (0xFF)</option>
+                <option value="bin">Binary (0b11111111)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Code Output Textarea & Action Bar -->
+          <div class="relative">
+            <pre id="codeOutputPre" class="code-scroll bg-chassis-950 border border-chassis-700 p-3 font-mono text-xs text-slate-200 overflow-x-auto max-h-[340px] leading-relaxed select-all"></pre>
+          </div>
+
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div class="font-mono text-[11px] text-slate-400">
+              <span>FLASH FOOTPRINT: <strong id="flashFootprintLabel" class="text-oled-cyan">1,024 bytes (0.078% of 1.3MB ESP32 app partition)</strong></span>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+              <button id="copyCodeBtn" type="button" class="tech-btn tech-btn-primary font-mono">
+                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                Copy Code to Clipboard
+              </button>
+              <button id="downloadHeaderBtn" type="button" class="tech-btn font-mono">
+                Download .h Header
+              </button>
+              <button id="downloadInoBtn" type="button" class="tech-btn font-mono">
+                Download .ino Sketch
+              </button>
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </div>
+  </main>
+
+  <!-- ========================================================= -->
+  <!-- VIEW 2: HUD & SENSOR DESIGNER (NEW INTERACTIVE FEATURE)    -->
+  <!-- ========================================================= -->
+  <section id="view-hud" class="hidden flex-1 max-w-[1440px] w-full mx-auto px-4 py-4 space-y-4">
+    <div class="tech-panel p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+      <div>
+        <h1 class="text-base sm:text-lg font-semibold text-white tracking-tight font-mono">
+          Interactive ESP32 Sensor HUD Builder (Live Temperature, Humidity &amp; Gauges)
+        </h1>
+        <p class="text-xs text-slate-400 mt-0.5">
+          Design your custom 128x64 HUD layout. Place dynamic sensor reading slots (like DHT22 / BME280 temperature), test them with live interactive simulation sliders, and export complete ready-to-flash ESP32 C++ firmware with auto-generated sensor-reading code.
+        </p>
+      </div>
+      <div class="flex flex-wrap items-center gap-2">
+        <button id="hudExportInoBtnTop" type="button" class="tech-btn tech-btn-primary font-mono">
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 15V3m0 12l-4-4m4 4l4-4M2 17l.621 2.485A2 2 0 004.561 21h14.878a2 2 0 001.94-1.515L22 17"/></svg>
+          Download Dynamic ESP32 Sketch (.ino)
+        </button>
+      </div>
+    </div>
+
+    <!-- HUD Layout Grid: 5 cols editor/controls + 7 cols OLED simulator & C++ output -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+
+      <!-- LEFT COLUMN (5 cols): Presets, Widgets & Sensor Simulation -->
+      <div class="lg:col-span-5 space-y-4">
+
+        <!-- Preset Selection -->
+        <div class="tech-panel p-3.5 space-y-2.5">
+          <div class="flex items-center justify-between border-b border-chassis-700 pb-2">
+            <h2 class="font-mono text-xs font-semibold uppercase text-slate-300">01 // HUD Preset Templates</h2>
+            <span class="font-mono text-[11px] text-oled-cyan">Instant Sensor Layouts</span>
+          </div>
+          <div class="grid grid-cols-2 gap-1.5 font-mono text-xs">
+            <button type="button" data-hudpreset="temp_hum" class="hud-preset-btn tech-btn tech-btn-active text-[11px] py-1.5">
+              DHT22 Temp &amp; Humidity
+            </button>
+            <button type="button" data-hudpreset="weather_bme" class="hud-preset-btn tech-btn text-[11px] py-1.5">
+              BME280 Weather HUD
+            </button>
+            <button type="button" data-hudpreset="analog_gauge" class="hud-preset-btn tech-btn text-[11px] py-1.5">
+              Analog ADC Gauge
+            </button>
+            <button type="button" data-hudpreset="battery_monitor" class="hud-preset-btn tech-btn text-[11px] py-1.5">
+              Battery &amp; VCC Monitor
+            </button>
+          </div>
+        </div>
+
+        <!-- Sensor Simulation Slider Panel -->
+        <div class="tech-panel p-3.5 space-y-3 bg-chassis-900 border-oled-cyan/40">
+          <div class="flex items-center justify-between border-b border-chassis-700 pb-2">
+            <h2 class="font-mono text-xs font-semibold uppercase text-oled-cyan flex items-center gap-1.5">
+              <span class="status-dot bg-emerald-400"></span>
+              Live Sensor Simulation (Drag to Test Screen)
+            </h2>
+          </div>
+
+          <!-- Temperature Simulation Slider -->
+          <div>
+            <div class="flex justify-between font-mono text-xs mb-1">
+              <span class="text-slate-300">Temperature Sensor (<code class="text-oled-cyan">tempC</code>):</span>
+              <span id="simTempDisplay" class="text-oled-cyan font-bold">24.5 °C</span>
+            </div>
+            <input id="simTempSlider" type="range" min="-10" max="80" step="0.5" value="24.5" />
+          </div>
+
+          <!-- Humidity Simulation Slider -->
+          <div>
+            <div class="flex justify-between font-mono text-xs mb-1">
+              <span class="text-slate-300">Humidity Sensor (<code class="text-oled-cyan">humidity</code>):</span>
+              <span id="simHumDisplay" class="text-oled-cyan font-bold">58 %</span>
+            </div>
+            <input id="simHumSlider" type="range" min="0" max="100" step="1" value="58" />
+          </div>
+
+          <!-- Analog ADC / Extra Value Slider -->
+          <div>
+            <div class="flex justify-between font-mono text-xs mb-1">
+              <span class="text-slate-300">Secondary Value (<code class="text-oled-cyan">extraVal</code>):</span>
+              <span id="simExtraDisplay" class="text-oled-cyan font-bold">1013 hPa</span>
+            </div>
+            <input id="simExtraSlider" type="range" min="900" max="1100" step="1" value="1013" />
+          </div>
+        </div>
+
+        <!-- Widget List & Placement Manager -->
+        <div class="tech-panel p-3.5 space-y-3">
+          <div class="flex items-center justify-between border-b border-chassis-700 pb-2">
+            <h2 class="font-mono text-xs font-semibold uppercase text-slate-300">02 // Screen Widgets</h2>
+            <div class="flex items-center gap-1">
+              <button id="addSensorSlotBtn" type="button" class="tech-btn tech-btn-primary font-mono text-[11px] py-1 px-2">
+                + Add Value Slot
+              </button>
+              <button id="addGaugeBarBtn" type="button" class="tech-btn font-mono text-[11px] py-1 px-2">
+                + Add Bar Gauge
+              </button>
+            </div>
+          </div>
+
+          <!-- List of Active Widgets -->
+          <div id="hudWidgetList" class="space-y-2 max-h-[300px] overflow-y-auto code-scroll pr-1"></div>
+        </div>
+
+        <!-- Target Sensor Hardware Selector -->
+        <div class="tech-panel p-3.5 space-y-3">
+          <div class="flex items-center justify-between border-b border-chassis-700 pb-2">
+            <h2 class="font-mono text-xs font-semibold uppercase text-slate-300">03 // ESP32 Sensor Hardware Wiring</h2>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 font-mono text-xs">
+            <div>
+              <label for="sensorDriverTypeSelect" class="block text-[11px] text-slate-400 mb-1">SENSOR HARDWARE</label>
+              <select id="sensorDriverTypeSelect" class="tech-input w-full">
+                <option value="dht22">DHT22 / DHT11 (Digital Pin)</option>
+                <option value="bme280">BME280 / BMP280 (I2C Bus)</option>
+                <option value="ds18b20">DS18B20 OneWire Temp</option>
+                <option value="analog">Analog Pin (ADC Pot/NTC)</option>
+                <option value="custom">Custom Code / Free Variables</option>
+              </select>
+            </div>
+            <div>
+              <label for="sensorGpioPinInput" class="block text-[11px] text-slate-400 mb-1">SENSOR GPIO PIN</label>
+              <input id="sensorGpioPinInput" type="number" min="0" max="48" value="4" class="tech-input w-full" />
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- RIGHT COLUMN (7 cols): Live 128x64 OLED HUD Simulator + Dynamic C++ Code Generator -->
+      <div class="lg:col-span-7 space-y-4">
+
+        <!-- Live 128x64 OLED HUD Preview Canvas -->
+        <div class="tech-panel p-3.5 space-y-3">
+          <div class="flex flex-wrap items-center justify-between gap-2 border-b border-chassis-700 pb-2">
+            <div class="flex items-center gap-2">
+              <h2 class="font-mono text-xs font-semibold uppercase text-slate-300">128x64 Live HUD Screen Simulator</h2>
+              <span class="font-mono text-[10px] px-1.5 py-0.5 bg-chassis-950 border border-chassis-700 text-oled-cyan">Direct Adafruit_GFX Preview</span>
+            </div>
+            <div class="flex items-center gap-2 font-mono text-xs">
+              <label class="flex items-center gap-1 text-slate-400 cursor-pointer text-[11px]">
+                <input id="hudPixelGridToggle" type="checkbox" checked class="accent-oled-cyan" />
+                Pixel Grid
+              </label>
+            </div>
+          </div>
+
+          <div class="oled-screen-frame p-3 flex flex-col items-center justify-center relative overflow-x-auto">
+            <canvas id="hudPreviewCanvas" width="768" height="384" class="w-full max-w-[768px] h-auto block border border-chassis-700"></canvas>
+          </div>
+
+          <!-- 1:1 Native Preview Strip for HUD -->
+          <div class="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-chassis-800 text-xs font-mono">
+            <div class="flex items-center gap-3">
+              <div class="p-1.5 bg-chassis-950 border border-chassis-700">
+                <canvas id="hudActualCanvas" width="128" height="64" class="block"></canvas>
+              </div>
+              <div>
+                <span class="text-white font-semibold">1:1 Physical Scale (128x64)</span>
+                <p class="text-[11px] text-slate-400">Actual size on 0.96-inch OLED panel.</p>
+              </div>
+            </div>
+            <div class="text-[11px] text-slate-400">
+              UPDATE FREQUENCY: <strong class="text-emerald-400">1000 ms (Non-Blocking)</strong>
+            </div>
+          </div>
+        </div>
+
+        <!-- Dynamic ESP32 Sketch Code Output with drawHUD() Function -->
+        <div class="tech-panel p-3.5 space-y-3">
+          <div class="flex flex-wrap items-center justify-between gap-2 border-b border-chassis-700 pb-2">
+            <div>
+              <h2 class="font-mono text-xs font-semibold uppercase text-slate-300">Generated Dynamic ESP32 Arduino Sketch (.ino)</h2>
+              <p class="text-[11px] text-slate-400 mt-0.5 font-mono">Includes sensor reading logic and dynamic <code class="text-oled-cyan">drawHUD()</code> function for exact (X,Y) coordinates.</p>
+            </div>
+            <button id="copyHudCodeBtn" type="button" class="tech-btn tech-btn-primary font-mono text-xs py-1 px-2.5">
+              Copy Sketch Code
+            </button>
+          </div>
+
+          <pre id="hudCodeOutputPre" class="code-scroll bg-chassis-950 border border-chassis-700 p-3 font-mono text-xs text-slate-200 overflow-x-auto max-h-[380px] leading-relaxed select-all"></pre>
+
+          <div class="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-chassis-800 font-mono text-xs">
+            <span class="text-slate-400">RAM BUFFER: <strong class="text-white">1,024 Bytes</strong></span>
+            <div class="flex items-center gap-2">
+              <button id="downloadHudInoBtn" type="button" class="tech-btn font-mono">
+                Download .ino File
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================================================= -->
+  <!-- VIEW 3: ESP32 WIRING & SPECS                              -->
+  <!-- ========================================================= -->
+  <section id="view-wiring" class="hidden flex-1 max-w-[1440px] w-full mx-auto px-4 py-6 space-y-6">
+    <div class="tech-panel p-5 space-y-4">
+      <div class="border-b border-chassis-700 pb-3 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h1 class="text-lg font-semibold text-white font-mono">ESP32 to 128x64 OLED Hardware Reference &amp; Pinout</h1>
+          <p class="text-xs text-slate-400 mt-1">Verified hardware connections and memory layout for SSD1306 and SH1106 0.96-inch / 1.3-inch OLED modules.</p>
+        </div>
+        <button type="button" data-nav="workbench" class="nav-tab tech-btn tech-btn-primary font-mono">Return to Converter</button>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- I2C Pinout Table -->
+        <div class="space-y-2">
+          <h2 class="font-mono text-xs font-semibold uppercase text-oled-cyan">Standard 4-Pin I2C Wiring (SSD1306 / SH1106)</h2>
+          <div class="overflow-x-auto border border-chassis-700">
+            <table class="w-full text-left font-mono text-xs">
+              <thead class="bg-chassis-800 text-slate-300 border-b border-chassis-700">
+                <tr>
+                  <th class="p-2.5">OLED Pin</th>
+                  <th class="p-2.5">ESP32-WROOM / DevKitC</th>
+                  <th class="p-2.5">ESP32-S3 / C3</th>
+                  <th class="p-2.5">Function</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-chassis-800 bg-chassis-950">
+                <tr>
+                  <td class="p-2.5 text-white font-semibold">GND</td>
+                  <td class="p-2.5 text-slate-300">GND</td>
+                  <td class="p-2.5 text-slate-300">GND</td>
+                  <td class="p-2.5 text-slate-400">Common Ground</td>
+                </tr>
+                <tr>
+                  <td class="p-2.5 text-amber-400 font-semibold">VCC / VDD</td>
+                  <td class="p-2.5 text-slate-300">3V3 (3.3V Pin)</td>
+                  <td class="p-2.5 text-slate-300">3V3 (3.3V Pin)</td>
+                  <td class="p-2.5 text-slate-400">Logic &amp; Charge Pump Supply</td>
+                </tr>
+                <tr>
+                  <td class="p-2.5 text-oled-cyan font-semibold">SCL / SCK</td>
+                  <td class="p-2.5 text-slate-300">GPIO 22</td>
+                  <td class="p-2.5 text-slate-300">GPIO 9 (C3) / GPIO 18 (S3)</td>
+                  <td class="p-2.5 text-slate-400">I2C Clock (400kHz Fast Mode)</td>
+                </tr>
+                <tr>
+                  <td class="p-2.5 text-emerald-400 font-semibold">SDA</td>
+                  <td class="p-2.5 text-slate-300">GPIO 21</td>
+                  <td class="p-2.5 text-slate-300">GPIO 8 (C3) / GPIO 17 (S3)</td>
+                  <td class="p-2.5 text-slate-400">I2C Bidirectional Data</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Byte Packing Architecture -->
+        <div class="space-y-2">
+          <h2 class="font-mono text-xs font-semibold uppercase text-oled-cyan">128x64 Framebuffer Memory Math</h2>
+          <div class="bg-chassis-950 border border-chassis-700 p-3.5 space-y-2.5 text-xs text-slate-300">
+            <div class="flex justify-between border-b border-chassis-800 pb-1.5 font-mono">
+              <span class="text-slate-400">Total Active Pixels:</span>
+              <span class="text-white">128 columns x 64 rows = 8,192 pixels</span>
+            </div>
+            <div class="flex justify-between border-b border-chassis-800 pb-1.5 font-mono">
+              <span class="text-slate-400">Color Depth:</span>
+              <span class="text-white">1-bit Monochrome (8 pixels per byte)</span>
+            </div>
+            <div class="flex justify-between border-b border-chassis-800 pb-1.5 font-mono">
+              <span class="text-slate-400">Bytes per Frame:</span>
+              <span class="text-oled-cyan">8,192 / 8 = 1,024 bytes (1.00 KB)</span>
+            </div>
+            <div class="flex justify-between border-b border-chassis-800 pb-1.5 font-mono">
+              <span class="text-slate-400">Adafruit_GFX drawBitmap():</span>
+              <span class="text-white">Horizontal Row-Major, MSB First</span>
+            </div>
+            <div class="flex justify-between font-mono">
+              <span class="text-slate-400">U8g2 drawXBM():</span>
+              <span class="text-white">Horizontal Row-Major, LSB First</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================================================= -->
+  <!-- VIEW 4: DEPLOY & LAUNCH CHECKLIST (LOVABLE / ANTIGRAVITY) -->
+  <!-- ========================================================= -->
+  <section id="view-deploy" class="hidden flex-1 max-w-[1440px] w-full mx-auto px-4 py-6 space-y-6">
+    <div class="tech-panel p-5 space-y-5">
+      <div class="border-b border-chassis-700 pb-3 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h1 class="text-lg font-semibold text-white font-mono">Pre-Launch Readiness Gate &amp; Lovable / Antigravity Deployment</h1>
+          <p class="text-xs text-slate-400 mt-1">Verify every pre-launch requirement before switching your project to production.</p>
+        </div>
+        <button type="button" data-nav="workbench" class="nav-tab tech-btn tech-btn-primary font-mono">Return to Converter</button>
+      </div>
+
+      <!-- Interactive Pre-Launch Gate Checklist -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="space-y-3">
+          <h2 class="font-mono text-xs font-semibold uppercase text-oled-cyan">Mandatory Production Launch Gate</h2>
+          <div class="bg-chassis-950 border border-chassis-700 divide-y divide-chassis-800 font-mono text-xs">
+            <label class="p-3 flex items-start gap-3 cursor-pointer">
+              <input type="checkbox" checked class="launch-check mt-0.5 accent-oled-cyan" />
+              <div>
+                <div class="text-white font-semibold">Custom SVG Favicon Configured</div>
+                <p class="text-slate-400 text-[11px] mt-0.5">Embedded 128x64 OLED microchip SVG icon in document head (<code class="text-oled-cyan">rel="icon"</code>).</p>
+              </div>
+            </label>
+            <label class="p-3 flex items-start gap-3 cursor-pointer">
+              <input type="checkbox" checked class="launch-check mt-0.5 accent-oled-cyan" />
+              <div>
+                <div class="text-white font-semibold">"Made with AI / Lovable" Badge Removed</div>
+                <p class="text-slate-400 text-[11px] mt-0.5">Zero watermarks, zero floating AI badges, and <code class="text-oled-cyan">lovable-tagger</code> disabled in production build.</p>
+              </div>
+            </label>
+            <label class="p-3 flex items-start gap-3 cursor-pointer">
+              <input type="checkbox" checked class="launch-check mt-0.5 accent-oled-cyan" />
+              <div>
+                <div class="text-white font-semibold">Privacy Policy Page Published</div>
+                <p class="text-slate-400 text-[11px] mt-0.5">Accessible via top navigation and footer; documents local client-side image processing.</p>
+              </div>
+            </label>
+            <label class="p-3 flex items-start gap-3 cursor-pointer">
+              <input type="checkbox" checked class="launch-check mt-0.5 accent-oled-cyan" />
+              <div>
+                <div class="text-white font-semibold">Terms and Conditions Page Published</div>
+                <p class="text-slate-400 text-[11px] mt-0.5">Accessible via top navigation and footer; covers MIT/CC0 code output licensing and hardware safety.</p>
+              </div>
+            </label>
+            <label class="p-3 flex items-start gap-3 cursor-pointer">
+              <input id="customDomainCheck" type="checkbox" class="launch-check mt-0.5 accent-oled-cyan" />
+              <div>
+                <div class="text-white font-semibold">Custom Domain Connected &amp; SSL Active</div>
+                <p class="text-slate-400 text-[11px] mt-0.5">Check this box once your DNS A and CNAME records resolve to your production host.</p>
+              </div>
+            </label>
+          </div>
+
+          <div id="launchStatusBanner" class="p-3 bg-chassis-950 border border-amber-500/60 font-mono text-xs text-amber-300">
+            STATUS: HOLD LAUNCH (4/5 requirements verified. Connect custom domain and check the box above to clear launch gate.)
+          </div>
+        </div>
+
+        <!-- Custom Domain & Lovable / Antigravity Config Generator -->
+        <div class="space-y-3">
+          <h2 class="font-mono text-xs font-semibold uppercase text-oled-cyan">Custom Domain &amp; Lovable / Antigravity Setup</h2>
+          <div class="bg-chassis-950 border border-chassis-700 p-3.5 space-y-3">
+            <div>
+              <label for="domainNameInput" class="block font-mono text-[11px] text-slate-400 mb-1">YOUR CUSTOM DOMAIN (FOR DNS &amp; LEGAL PAGES)</label>
+              <div class="flex gap-2">
+                <input id="domainNameInput" type="text" value="oled128x64.dev" class="tech-input flex-1" />
+                <button id="applyDomainBtn" type="button" class="tech-btn tech-btn-primary font-mono">Apply Domain</button>
+              </div>
+            </div>
+
+            <div class="space-y-1.5 text-xs">
+              <div class="font-mono text-[11px] text-slate-400">1. REMOVE LOVABLE BADGE &amp; COMPONENT TAGGER:</div>
+              <p class="text-slate-300 text-[11px]">
+                In Lovable Project Settings &gt; General, toggle off <strong>"Show Lovable Badge"</strong>. In <code class="text-oled-cyan font-mono">vite.config.ts</code>, remove <code class="text-oled-cyan font-mono">componentTagger()</code> from the plugins array so no inspector tags appear in production DOM.
+              </p>
+            </div>
+
+            <div class="space-y-1.5 text-xs">
+              <div class="font-mono text-[11px] text-slate-400">2. ANTIGRAVITY / LOCAL WORKSPACE EXPORT:</div>
+              <p class="text-slate-300 text-[11px]">
+                Open this single-file application directly in Antigravity or deploy to Cloudflare Pages / Vercel / Netlify. Connect <strong id="dnsDomainPreview" class="text-white font-mono">oled128x64.dev</strong> via an <code class="text-oled-cyan font-mono">A</code> record or <code class="text-oled-cyan font-mono">CNAME</code> target.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================================================= -->
+  <!-- VIEW 5: PRIVACY POLICY PAGE                               -->
+  <!-- ========================================================= -->
+  <section id="view-privacy" class="hidden flex-1 max-w-[1024px] w-full mx-auto px-4 py-6">
+    <article class="tech-panel p-6 space-y-4 text-sm text-slate-300 leading-relaxed">
+      <div class="border-b border-chassis-700 pb-3 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h1 class="text-lg font-semibold text-white font-mono">Privacy Policy</h1>
+          <p class="text-xs text-slate-400 font-mono mt-0.5">Effective Date: October 20, 2026 // Domain: <span class="legal-domain-span text-oled-cyan">oled128x64.dev</span></p>
+        </div>
+        <button type="button" data-nav="workbench" class="nav-tab tech-btn font-mono">Back to Converter</button>
+      </div>
+
+      <div class="space-y-3 text-xs sm:text-sm">
+        <h2 class="font-mono text-xs font-semibold uppercase text-oled-cyan">1. Zero Server-Side Image Uploads</h2>
+        <p>
+          OLED128x64 operates strictly as a client-side web application. When you select, drag-and-drop, or paste an image file into the converter, all decoding, resizing, dithering, pixel editing, and C/C++ byte array generation happen locally inside your web browser's memory using the HTML5 Canvas API. Your source images and generated firmware headers are never transmitted to any external server, cloud storage bucket, or third-party API.
+        </p>
+
+        <h2 class="font-mono text-xs font-semibold uppercase text-oled-cyan">2. Local Storage &amp; Preferences</h2>
+        <p>
+          This application stores only non-personal configuration state (such as your selected I2C GPIO pin numbers, target display driver, and custom domain checklist state) inside your browser's local memory during your active session. No tracking cookies, advertising pixels, or behavioral fingerprinting scripts are used.
+        </p>
+
+        <h2 class="font-mono text-xs font-semibold uppercase text-oled-cyan">3. Server Logs &amp; Static Hosting</h2>
+        <p>
+          When you access <span class="legal-domain-span font-mono text-white">oled128x64.dev</span>, standard HTTP server access logs (IP address, user-agent string, and timestamp) may be processed transiently by the DNS and static hosting provider solely to deliver the application assets and mitigate distributed denial-of-service (DDoS) traffic.
+        </p>
+
+        <h2 class="font-mono text-xs font-semibold uppercase text-oled-cyan">4. Contact &amp; Data Requests</h2>
+        <p>
+          Because we do not collect, store, or process personal accounts or uploaded media on any backend server, we hold no personal user datasets. For privacy inquiries regarding this utility, contact the maintainer via the project repository or administrative contact for <span class="legal-domain-span font-mono text-white">oled128x64.dev</span>.
+        </p>
+      </div>
+    </article>
+  </section>
+
+  <!-- ========================================================= -->
+  <!-- VIEW 6: TERMS AND CONDITIONS PAGE                         -->
+  <!-- ========================================================= -->
+  <section id="view-terms" class="hidden flex-1 max-w-[1024px] w-full mx-auto px-4 py-6">
+    <article class="tech-panel p-6 space-y-4 text-sm text-slate-300 leading-relaxed">
+      <div class="border-b border-chassis-700 pb-3 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h1 class="text-lg font-semibold text-white font-mono">Terms and Conditions</h1>
+          <p class="text-xs text-slate-400 font-mono mt-0.5">Last Updated: October 20, 2026 // Domain: <span class="legal-domain-span text-oled-cyan">oled128x64.dev</span></p>
+        </div>
+        <button type="button" data-nav="workbench" class="nav-tab tech-btn font-mono">Back to Converter</button>
+      </div>
+
+      <div class="space-y-3 text-xs sm:text-sm">
+        <h2 class="font-mono text-xs font-semibold uppercase text-oled-cyan">1. Acceptance of Terms</h2>
+        <p>
+          By accessing and using the OLED128x64 image conversion utility on <span class="legal-domain-span font-mono text-white">oled128x64.dev</span>, you agree to be bound by these Terms and Conditions. If you do not agree with any part of these terms, do not use this website.
+        </p>
+
+        <h2 class="font-mono text-xs font-semibold uppercase text-oled-cyan">2. License to Generated C/C++ Output</h2>
+        <p>
+          You retain full ownership and copyright of any source images you process through this utility. All C/C++ <code class="font-mono text-oled-cyan">PROGMEM</code> byte arrays, header files (<code class="font-mono text-oled-cyan">.h</code>), and ESP32 Arduino/PlatformIO sketch scaffolding (<code class="font-mono text-oled-cyan">.ino</code>) generated by the tool are provided free of restrictions under the MIT / CC0 Public Domain dedication for both personal and commercial embedded firmware projects.
+        </p>
+
+        <h2 class="font-mono text-xs font-semibold uppercase text-oled-cyan">3. Hardware &amp; Firmware Disclaimer</h2>
+        <p>
+          This utility and its generated code are provided on an "AS IS" and "AS AVAILABLE" basis without warranties of any kind. Always verify your OLED module's supply voltage (3.3V vs 5V tolerance), pin order (GND/VCC vs VCC/GND varies across manufacturers), and I2C pull-up resistor values before applying power to your ESP32 board. The maintainers of <span class="legal-domain-span font-mono text-white">oled128x64.dev</span> are not liable for damaged microcontrollers, OLED panels, or firmware malfunctions.
+        </p>
+
+        <h2 class="font-mono text-xs font-semibold uppercase text-oled-cyan">4. Intellectual Property Responsibilities</h2>
+        <p>
+          You are solely responsible for ensuring that you have the necessary rights to convert and embed any third-party logos, sprites, or artwork into your hardware or firmware distributions.
+        </p>
+      </div>
+    </article>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="border-t border-chassis-800 bg-chassis-900 mt-auto">
+    <div class="max-w-[1440px] mx-auto px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-2 font-mono text-[11px] text-slate-400">
+      <div class="flex items-center gap-2">
+        <span class="status-dot bg-emerald-400"></span>
+        <span>OLED128x64 (<span class="legal-domain-span text-slate-200">oled128x64.dev</span>) // 100% Client-Side ESP32 Display Utility</span>
+      </div>
+      <div class="flex flex-wrap items-center gap-4">
+        <button type="button" data-nav="workbench" class="nav-tab hover:text-oled-cyan">Workbench</button>
+        <button type="button" data-nav="hud" class="nav-tab hover:text-oled-cyan">HUD Designer</button>
+        <button type="button" data-nav="wiring" class="nav-tab hover:text-oled-cyan">ESP32 Pinout</button>
+        <button type="button" data-nav="deploy" class="nav-tab hover:text-oled-cyan">Launch Gate</button>
+        <button type="button" data-nav="privacy" class="nav-tab hover:text-oled-cyan">Privacy Policy</button>
+        <button type="button" data-nav="terms" class="nav-tab hover:text-oled-cyan">Terms &amp; Conditions</button>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ========================================================= -->
+  <!-- APPLICATION LOGIC                                         -->
+  <!-- ========================================================= -->
+  <script>
+    (function() {
+      const WIDTH = 128;
+      const HEIGHT = 64;
+      const ZOOM = 6; // 128*6 = 768, 64*6 = 384
+
+      // Application State
+      const state = {
+        activeView: 'workbench',
+        presetName: 'telemetry',
+        sourceFileName: 'esp32_telemetry_hud.pattern',
+        scaleMode: 'contain',
+        bgFill: 'black',
+        ditherAlgo: 'threshold',
+        threshold: 128,
+        brightness: 0,
+        contrast: 0,
+        flipH: false,
+        flipV: false,
+        rotation: 0,
+        invert: false,
+        panelColor: 'cyan',
+        activeTool: 'draw',
+        showGrid: true,
+        showPageGuides: false,
+        codeTab: 'header',
+        driverFormat: 'adafruit',
+        scanMode: 'horizontal',
+        bitOrder: 'msb',
+        arrayName: 'oled_frame_128x64',
+        espSda: 21,
+        espScl: 22,
+        i2cAddr: '0x3C',
+        byteRadix: 'hex',
+        customDomain: 'oled128x64.dev',
+        pixels: new Uint8Array(WIDTH * HEIGHT),
+        undoStack: [],
+        frameQueue: [],
+
+        // HUD Designer State
+        hudPreset: 'temp_hum',
+        simTemp: 24.5,
+        simHum: 58,
+        simExtra: 1013,
+        sensorHardware: 'dht22',
+        sensorPin: 4,
+        hudShowGrid: true,
+        // Widgets array: { id, type: 'sensor'|'bar'|'label'|'box', name, varName, x, y, size: 1|2, labelText, unitText, minVal, maxVal, width, height }
+        hudWidgets: []
+      };
+
+      // Offscreen source image canvas
+      const sourceCanvas = document.createElement('canvas');
+      sourceCanvas.width = 256;
+      sourceCanvas.height = 128;
+      const sourceCtx = sourceCanvas.getContext('2d');
+
+      // Offscreen 128x64 resampling canvas
+      const workCanvas = document.createElement('canvas');
+      workCanvas.width = WIDTH;
+      workCanvas.height = HEIGHT;
+      const workCtx = workCanvas.getContext('2d', { willReadFrequently: true });
+
+      // DOM Elements for Converter
+      const sourceThumbCanvas = document.getElementById('sourceThumbCanvas');
+      const sourceThumbCtx = sourceThumbCanvas.getContext('2d');
+      const oledInteractiveCanvas = document.getElementById('oledInteractiveCanvas');
+      const oledCtx = oledInteractiveCanvas.getContext('2d');
+      const oledActualSizeCanvas = document.getElementById('oledActualSizeCanvas');
+      const actualCtx = oledActualSizeCanvas.getContext('2d');
+
+      const sourceDimensionsBadge = document.getElementById('sourceDimensionsBadge');
+      const sourceFileNameEl = document.getElementById('sourceFileName');
+      const codeOutputPre = document.getElementById('codeOutputPre');
+      const litPixelCountReadout = document.getElementById('litPixelCountReadout');
+      const currentDrawReadout = document.getElementById('currentDrawReadout');
+      const cursorCoordReadout = document.getElementById('cursorCoordReadout');
+      const cursorByteReadout = document.getElementById('cursorByteReadout');
+      const flashFootprintLabel = document.getElementById('flashFootprintLabel');
+      const frameQueueCount = document.getElementById('frameQueueCount');
+      const frameQueueStrip = document.getElementById('frameQueueStrip');
+
+      // DOM Elements for HUD Designer
+      const hudPreviewCanvas = document.getElementById('hudPreviewCanvas');
+      const hudPreviewCtx = hudPreviewCanvas.getContext('2d');
+      const hudActualCanvas = document.getElementById('hudActualCanvas');
+      const hudActualCtx = hudActualCanvas.getContext('2d');
+      const hudCodeOutputPre = document.getElementById('hudCodeOutputPre');
+      const hudWidgetListEl = document.getElementById('hudWidgetList');
+      const simTempSlider = document.getElementById('simTempSlider');
+      const simHumSlider = document.getElementById('simHumSlider');
+      const simExtraSlider = document.getElementById('simExtraSlider');
+      const simTempDisplay = document.getElementById('simTempDisplay');
+      const simHumDisplay = document.getElementById('simHumDisplay');
+      const simExtraDisplay = document.getElementById('simExtraDisplay');
+      const sensorDriverTypeSelect = document.getElementById('sensorDriverTypeSelect');
+      const sensorGpioPinInput = document.getElementById('sensorGpioPinInput');
+
+      function showToast(msg) {
+        const banner = document.getElementById('toastBanner');
+        const text = document.getElementById('toastMessage');
+        text.textContent = msg;
+        banner.classList.remove('hidden');
+        clearTimeout(showToast._timer);
+        showToast._timer = setTimeout(function() {
+          banner.classList.add('hidden');
+        }, 2600);
+      }
+
+      // =========================================================
+      // 1. DETERMINISTIC HARDWARE TEST PATTERNS (CONVERTER)
+      // =========================================================
+      function generatePresetPattern(preset) {
+        state.presetName = preset;
+        state.flipH = false;
+        state.flipV = false;
+        state.rotation = 0;
+        sourceCanvas.width = 256;
+        sourceCanvas.height = 128;
+        const ctx = sourceCtx;
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(0, 0, 256, 128);
+        ctx.fillStyle = '#FFFFFF';
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.lineWidth = 2;
+
+        if (preset === 'telemetry') {
+          state.sourceFileName = 'esp32_telemetry_hud.pattern';
+          ctx.strokeRect(2, 2, 252, 124);
+          ctx.fillRect(2, 2, 252, 24);
+          ctx.fillStyle = '#000000';
+          ctx.font = 'bold 14px "IBM Plex Mono", monospace';
+          ctx.fillText('ESP32-S3 // NODE_01   -62dBm', 10, 19);
+
+          ctx.fillStyle = '#FFFFFF';
+          ctx.font = 'bold 26px "IBM Plex Mono", monospace';
+          ctx.fillText('24.8 C', 12, 60);
+          ctx.font = '14px "IBM Plex Mono", monospace';
+          ctx.fillText('HUM: 48.2%  VCC: 3.31V', 12, 82);
+          ctx.fillText('UPTIME: 00:42:19', 12, 104);
+
+          ctx.strokeRect(156, 34, 88, 80);
+          ctx.beginPath();
+          for (let x = 0; x <= 84; x += 4) {
+            const y = 74 + Math.sin(x * 0.14) * 24 + Math.cos(x * 0.3) * 8;
+            if (x === 0) ctx.moveTo(158 + x, y);
+            else ctx.lineTo(158 + x, y);
+          }
+          ctx.stroke();
+        } else if (preset === 'calibration') {
+          state.sourceFileName = 'ansi_calibration_128x64.pattern';
+          ctx.strokeRect(1, 1, 254, 126);
+          ctx.strokeRect(5, 5, 246, 118);
+          ctx.beginPath();
+          ctx.moveTo(128, 0); ctx.lineTo(128, 128);
+          ctx.moveTo(0, 64); ctx.lineTo(256, 64);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.arc(128, 64, 46, 0, Math.PI * 2);
+          ctx.stroke();
+          for (let y = 12; y < 44; y += 4) {
+            for (let x = 12; x < 60; x += 4) {
+              if (((x + y) / 4) % 2 === 0) ctx.fillRect(x, y, 4, 4);
+            }
+          }
+          ctx.font = 'bold 14px "IBM Plex Mono", monospace';
+          ctx.fillText('128x64 CAL', 152, 28);
+          ctx.fillText('1:1 ASPECT', 152, 112);
+        } else if (preset === 'scope') {
+          state.sourceFileName = 'dso_oscilloscope_ch1.pattern';
+          for (let x = 0; x < 256; x += 32) {
+            for (let y = 0; y < 128; y += 8) {
+              ctx.fillRect(x, y, 2, 2);
+            }
+          }
+          for (let y = 0; y < 128; y += 32) {
+            for (let x = 0; x < 256; x += 8) {
+              ctx.fillRect(x, y, 2, 2);
+            }
+          }
+          ctx.font = 'bold 13px "IBM Plex Mono", monospace';
+          ctx.fillText('CH1: 1.0V/div  250us', 8, 16);
+          ctx.fillText('FREQ: 4.00kHz  Vpp:3.3V', 8, 122);
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          for (let x = 0; x < 256; x++) {
+            const y = 64 + Math.sin(x * 0.08) * 34;
+            if (x === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          }
+          ctx.stroke();
+        } else if (preset === 'chip') {
+          state.sourceFileName = 'esp32_wroom_pinout.pattern';
+          ctx.strokeRect(68, 12, 120, 104);
+          ctx.strokeRect(84, 20, 88, 52);
+          ctx.font = 'bold 14px "IBM Plex Mono", monospace';
+          ctx.fillText('ESP32-WROOM', 88, 50);
+          ctx.font = '12px "IBM Plex Mono", monospace';
+          ctx.fillText('SDA -> GPIO21', 82, 92);
+          ctx.fillText('SCL -> GPIO22', 82, 108);
+          for (let y = 20; y <= 104; y += 12) {
+            ctx.fillRect(52, y, 16, 6);
+            ctx.fillRect(188, y, 16, 6);
+          }
+          ctx.font = '11px "IBM Plex Mono", monospace';
+          ctx.fillText('3V3', 20, 26);
+          ctx.fillText('GND', 20, 50);
+          ctx.fillText('G22', 208, 38);
+          ctx.fillText('G21', 208, 62);
+        } else if (preset === 'weather') {
+          state.sourceFileName = 'bme280_sensor_node.pattern';
+          ctx.strokeRect(2, 2, 252, 124);
+          ctx.font = 'bold 14px "IBM Plex Mono", monospace';
+          ctx.fillText('BME280 ENV SENSOR', 12, 22);
+          ctx.beginPath();
+          ctx.moveTo(2, 28); ctx.lineTo(254, 28);
+          ctx.stroke();
+          ctx.font = 'bold 30px "IBM Plex Mono", monospace';
+          ctx.fillText('1013 hPa', 12, 66);
+          ctx.font = '15px "IBM Plex Mono", monospace';
+          ctx.fillText('TEMP: 22.4C   RH: 54%', 12, 94);
+          ctx.fillText('I2C ADDR: 0x76   OK', 12, 116);
+        } else if (preset === 'halftone') {
+          state.sourceFileName = 'grayscale_dither_ramp.pattern';
+          const grad = ctx.createLinearGradient(0, 0, 256, 0);
+          grad.addColorStop(0, '#000000');
+          grad.addColorStop(1, '#FFFFFF');
+          ctx.fillStyle = grad;
+          ctx.fillRect(0, 0, 256, 64);
+
+          const rad = ctx.createRadialGradient(118, 92, 4, 128, 96, 48);
+          rad.addColorStop(0, '#FFFFFF');
+          rad.addColorStop(1, '#000000');
+          ctx.fillStyle = '#000000';
+          ctx.fillRect(0, 64, 256, 64);
+          ctx.fillStyle = rad;
+          ctx.fillRect(0, 64, 256, 64);
+
+          ctx.fillStyle = '#FFFFFF';
+          ctx.font = 'bold 13px "IBM Plex Mono", monospace';
+          ctx.fillText('SELECT FLOYD-STEINBERG OR BAYER', 8, 120);
+        }
+
+        updateSourceThumbnail();
+        processImageToFramebuffer();
+      }
+
+      function updateSourceThumbnail() {
+        sourceThumbCtx.fillStyle = '#090B0E';
+        sourceThumbCtx.fillRect(0, 0, 128, 64);
+        sourceThumbCtx.drawImage(sourceCanvas, 0, 0, 128, 64);
+        sourceDimensionsBadge.textContent = 'Source: ' + sourceCanvas.width + 'x' + sourceCanvas.height + ' px';
+        sourceFileNameEl.textContent = state.sourceFileName;
+      }
+
+      // =========================================================
+      // 2. RESAMPLING & DITHERING PIPELINE (CONVERTER)
+      // =========================================================
+      const BAYER_4X4 = [
+        [  0, 128,  32, 160 ],
+        [192,  64, 224,  96 ],
+        [ 48, 176,  16, 144 ],
+        [240, 112, 208,  80 ]
+      ];
+
+      const BAYER_8X8 = [
+        [  0, 128,  32, 160,   8, 136,  40, 168],
+        [192,  64, 224,  96, 200,  72, 232, 104],
+        [ 48, 176,  16, 144,  56, 184,  24, 152],
+        [240, 112, 208,  80, 248, 120, 216,  88],
+        [ 12, 140,  44, 172,   4, 132,  36, 164],
+        [204,  76, 236, 108, 196,  68, 228, 100],
+        [ 60, 188,  28, 156,  52, 180,  20, 148],
+        [252, 124, 220,  92, 244, 116, 212,  84]
+      ];
+
+      function clampByte(v) {
+        return v < 0 ? 0 : (v > 255 ? 255 : v);
+      }
+
+      function processImageToFramebuffer() {
+        workCtx.save();
+        workCtx.fillStyle = state.bgFill === 'white' ? '#FFFFFF' : '#000000';
+        workCtx.fillRect(0, 0, WIDTH, HEIGHT);
+
+        workCtx.translate(WIDTH / 2, HEIGHT / 2);
+        if (state.flipH) workCtx.scale(-1, 1);
+        if (state.flipV) workCtx.scale(1, -1);
+        if (state.rotation !== 0) {
+          workCtx.rotate((state.rotation * Math.PI) / 180);
+        }
+
+        const srcW = sourceCanvas.width;
+        const srcH = sourceCanvas.height;
+        let drawW = WIDTH;
+        let drawH = HEIGHT;
+
+        if (state.scaleMode === 'contain') {
+          const scale = Math.min(WIDTH / srcW, HEIGHT / srcH);
+          drawW = srcW * scale;
+          drawH = srcH * scale;
+        } else if (state.scaleMode === 'cover') {
+          const scale = Math.max(WIDTH / srcW, HEIGHT / srcH);
+          drawW = srcW * scale;
+          drawH = srcH * scale;
+        } else if (state.scaleMode === 'center') {
+          drawW = srcW;
+          drawH = srcH;
+        } else {
+          drawW = WIDTH;
+          drawH = HEIGHT;
+        }
+
+        workCtx.drawImage(sourceCanvas, -drawW / 2, -drawH / 2, drawW, drawH);
+        workCtx.restore();
+
+        const imgData = workCtx.getImageData(0, 0, WIDTH, HEIGHT).data;
+        const luma = new Float32Array(WIDTH * HEIGHT);
+
+        const brightOffset = state.brightness * 2.55;
+        const contrastFactor = (259 * (state.contrast + 255)) / (255 * (259 - state.contrast));
+
+        for (let i = 0; i < WIDTH * HEIGHT; i++) {
+          const r = imgData[i * 4];
+          const g = imgData[i * 4 + 1];
+          const b = imgData[i * 4 + 2];
+          const a = imgData[i * 4 + 3] / 255;
+          const bgVal = state.bgFill === 'white' ? 255 : 0;
+
+          let y = (0.299 * r + 0.587 * g + 0.114 * b) * a + bgVal * (1 - a);
+          y = contrastFactor * (y - 128) + 128 + brightOffset;
+          luma[i] = clampByte(y);
+        }
+
+        const out = new Uint8Array(WIDTH * HEIGHT);
+        const thresh = state.threshold;
+        const algo = state.ditherAlgo;
+
+        if (algo === 'threshold') {
+          for (let i = 0; i < WIDTH * HEIGHT; i++) {
+            out[i] = luma[i] >= thresh ? 1 : 0;
+          }
+        } else if (algo === 'bayer4') {
+          for (let y = 0; y < HEIGHT; y++) {
+            for (let x = 0; x < WIDTH; x++) {
+              const i = y * WIDTH + x;
+              const bayerVal = BAYER_4X4[y % 4][x % 4];
+              const adjusted = luma[i] + (128 - thresh);
+              out[i] = adjusted > bayerVal ? 1 : 0;
+            }
+          }
+        } else if (algo === 'bayer8') {
+          for (let y = 0; y < HEIGHT; y++) {
+            for (let x = 0; x < WIDTH; x++) {
+              const i = y * WIDTH + x;
+              const bayerVal = BAYER_8X8[y % 8][x % 8];
+              const adjusted = luma[i] + (128 - thresh);
+              out[i] = adjusted > bayerVal ? 1 : 0;
+            }
+          }
+        } else if (algo === 'floyd') {
+          for (let y = 0; y < HEIGHT; y++) {
+            for (let x = 0; x < WIDTH; x++) {
+              const i = y * WIDTH + x;
+              const oldP = luma[i];
+              const newP = oldP >= thresh ? 255 : 0;
+              out[i] = newP === 255 ? 1 : 0;
+              const err = oldP - newP;
+              if (x + 1 < WIDTH) luma[i + 1] += (err * 7) / 16;
+              if (y + 1 < HEIGHT) {
+                if (x > 0) luma[i + WIDTH - 1] += (err * 3) / 16;
+                luma[i + WIDTH] += (err * 5) / 16;
+                if (x + 1 < WIDTH) luma[i + WIDTH + 1] += (err * 1) / 16;
+              }
+            }
+          }
+        } else if (algo === 'atkinson') {
+          for (let y = 0; y < HEIGHT; y++) {
+            for (let x = 0; x < WIDTH; x++) {
+              const i = y * WIDTH + x;
+              const oldP = luma[i];
+              const newP = oldP >= thresh ? 255 : 0;
+              out[i] = newP === 255 ? 1 : 0;
+              const err = (oldP - newP) / 8;
+              if (x + 1 < WIDTH) luma[i + 1] += err;
+              if (x + 2 < WIDTH) luma[i + 2] += err;
+              if (y + 1 < HEIGHT) {
+                if (x > 0) luma[i + WIDTH - 1] += err;
+                luma[i + WIDTH] += err;
+                if (x + 1 < WIDTH) luma[i + WIDTH + 1] += err;
+              }
+              if (y + 2 < HEIGHT) {
+                luma[i + WIDTH * 2] += err;
+              }
+            }
+          }
+        }
+
+        if (state.invert) {
+          for (let i = 0; i < WIDTH * HEIGHT; i++) {
+            out[i] = out[i] ? 0 : 1;
+          }
+        }
+
+        state.pixels = out;
+        state.undoStack = [];
+        renderAllOutputs();
+      }
+
+      // =========================================================
+      // 3. RENDERING OLED SIMULATOR (CONVERTER)
+      // =========================================================
+      function getPixelColor(y) {
+        if (state.panelColor === 'white') return '#F8FAFC';
+        if (state.panelColor === 'amber') return '#FFB000';
+        if (state.panelColor === 'dual') {
+          return y < 16 ? '#FFD600' : '#00E5FF';
+        }
+        return '#00E5FF';
+      }
+
+      function renderOledCanvases(previewOverlayPixels) {
+        const buf = previewOverlayPixels || state.pixels;
+
+        oledCtx.fillStyle = '#050709';
+        oledCtx.fillRect(0, 0, WIDTH * ZOOM, HEIGHT * ZOOM);
+
+        actualCtx.fillStyle = '#050709';
+        actualCtx.fillRect(0, 0, WIDTH, HEIGHT);
+
+        let litCount = 0;
+        const pad = state.showGrid ? 1 : 0;
+        const cellSize = ZOOM - pad;
+
+        for (let y = 0; y < HEIGHT; y++) {
+          const rowColor = getPixelColor(y);
+          oledCtx.fillStyle = rowColor;
+          actualCtx.fillStyle = rowColor;
+
+          for (let x = 0; x < WIDTH; x++) {
+            const bit = buf[y * WIDTH + x];
+            if (bit) {
+              litCount++;
+              oledCtx.fillRect(x * ZOOM, y * ZOOM, cellSize, cellSize);
+              actualCtx.fillRect(x, y, 1, 1);
+            } else if (state.showGrid) {
+              oledCtx.fillStyle = '#0B0F14';
+              oledCtx.fillRect(x * ZOOM, y * ZOOM, cellSize, cellSize);
+              oledCtx.fillStyle = rowColor;
+            }
+          }
+        }
+
+        if (state.showPageGuides) {
+          oledCtx.strokeStyle = 'rgba(255, 176, 0, 0.45)';
+          oledCtx.lineWidth = 1;
+          for (let page = 1; page < 8; page++) {
+            const py = page * 8 * ZOOM;
+            oledCtx.beginPath();
+            oledCtx.moveTo(0, py);
+            oledCtx.lineTo(WIDTH * ZOOM, py);
+            oledCtx.stroke();
+          }
+        }
+
+        const pct = ((litCount / (WIDTH * HEIGHT)) * 100).toFixed(1);
+        litPixelCountReadout.textContent = litCount + ' / 8192 (' + pct + '%)';
+        const estMa = (1.5 + (litCount / 8192) * 16.5).toFixed(1);
+        currentDrawReadout.textContent = '~' + estMa + ' mA @ 3.3V';
+      }
+
+      // =========================================================
+      // 4. CODE GENERATION FOR CONVERTER WORKBENCH
+      // =========================================================
+      function sanitizeIdentifier(raw) {
+        let cleaned = (raw || 'oled_frame_128x64').replace(/[^a-zA-Z0-9_]/g, '_');
+        if (/^[0-9]/.test(cleaned)) cleaned = '_' + cleaned;
+        return cleaned || 'oled_frame_128x64';
+      }
+
+      function packPixelsToBytes(pixelBuffer) {
+        const bytes = new Uint8Array(1024);
+        const isHorizontal = state.scanMode === 'horizontal';
+        const isMsb = state.bitOrder === 'msb';
+
+        if (isHorizontal) {
+          let byteIdx = 0;
+          for (let y = 0; y < HEIGHT; y++) {
+            for (let bx = 0; bx < 16; bx++) {
+              let b = 0;
+              for (let bit = 0; bit < 8; bit++) {
+                const px = bx * 8 + bit;
+                const val = pixelBuffer[y * WIDTH + px] ? 1 : 0;
+                if (val) {
+                  if (isMsb) b |= (1 << (7 - bit));
+                  else b |= (1 << bit);
+                }
+              }
+              bytes[byteIdx++] = b;
+            }
+          }
+        } else {
+          let byteIdx = 0;
+          for (let page = 0; page < 8; page++) {
+            for (let x = 0; x < WIDTH; x++) {
+              let b = 0;
+              for (let bit = 0; bit < 8; bit++) {
+                const y = page * 8 + bit;
+                const val = pixelBuffer[y * WIDTH + x] ? 1 : 0;
+                if (val) {
+                  if (isMsb) b |= (1 << (7 - bit));
+                  else b |= (1 << bit);
+                }
+              }
+              bytes[byteIdx++] = b;
+            }
+          }
+        }
+        return bytes;
+      }
+
+      function formatByteLiteral(b) {
+        if (state.byteRadix === 'bin') {
+          return '0b' + b.toString(2).padStart(8, '0');
+        }
+        return '0x' + b.toString(16).toUpperCase().padStart(2, '0');
+      }
+
+      function formatByteBlock(bytes) {
+        const perLine = state.byteRadix === 'bin' ? 8 : 16;
+        const lines = [];
+        for (let i = 0; i < bytes.length; i += perLine) {
+          const slice = [];
+          for (let j = i; j < i + perLine && j < bytes.length; j++) {
+            slice.push(formatByteLiteral(bytes[j]));
+          }
+          lines.push('  ' + slice.join(', '));
+        }
+        return lines.join(',\n');
+      }
+
+      function generateHeaderCode() {
+        const id = sanitizeIdentifier(state.arrayName);
+        const guard = id.toUpperCase() + '_H';
+        const scanDesc = state.scanMode === 'horizontal' ? 'Horizontal Row-Major (16 bytes/row)' : 'Vertical Page-Major (8 pages x 128 cols)';
+        const bitDesc = state.bitOrder === 'msb' ? 'MSB First' : 'LSB First (XBM)';
+
+        let out = '';
+        out += '#ifndef ' + guard + '\n';
+        out += '#define ' + guard + '\n\n';
+        out += '#include <Arduino.h>\n';
+        out += '#include <pgmspace.h>\n\n';
+        out += '// Target Resolution : 128x64 pixels (1-bit Monochrome)\n';
+        out += '// Byte Addressing   : ' + scanDesc + '\n';
+        out += '// Bit Endianness    : ' + bitDesc + '\n';
+
+        if (state.frameQueue.length > 0) {
+          const totalBytes = state.frameQueue.length * 1024;
+          out += '// Multi-Frame Queue : ' + state.frameQueue.length + ' frames (' + totalBytes + ' bytes total)\n\n';
+          out += '#define ' + id.toUpperCase() + '_WIDTH  128\n';
+          out += '#define ' + id.toUpperCase() + '_HEIGHT 64\n';
+          out += '#define ' + id.toUpperCase() + '_FRAMES ' + state.frameQueue.length + '\n\n';
+          out += 'const uint8_t PROGMEM ' + id + '_frames[' + state.frameQueue.length + '][1024] = {\n';
+          for (let f = 0; f < state.frameQueue.length; f++) {
+            const fBytes = packPixelsToBytes(state.frameQueue[f]);
+            out += '  { // Frame ' + f + '\n' + formatByteBlock(fBytes) + '\n  }' + (f < state.frameQueue.length - 1 ? ',' : '') + '\n';
+          }
+          out += '};\n\n#endif // ' + guard + '\n';
+          flashFootprintLabel.textContent = totalBytes.toLocaleString() + ' bytes (' + state.frameQueue.length + ' frames in PROGMEM)';
+          return out;
+        }
+
+        const currentBytes = packPixelsToBytes(state.pixels);
+        out += '// Memory Footprint  : 1,024 bytes in Flash PROGMEM\n\n';
+        out += '#define ' + id.toUpperCase() + '_WIDTH  128\n';
+        out += '#define ' + id.toUpperCase() + '_HEIGHT 64\n\n';
+        out += 'const uint8_t PROGMEM ' + id + '[1024] = {\n';
+        out += formatByteBlock(currentBytes) + '\n';
+        out += '};\n\n';
+        out += '#endif // ' + guard + '\n';
+
+        flashFootprintLabel.textContent = '1,024 bytes (0.078% of 1.3MB ESP32 app partition)';
+        return out;
+      }
+
+      function generateSketchCode() {
+        const id = sanitizeIdentifier(state.arrayName);
+        const sda = parseInt(state.espSda, 10) || 21;
+        const scl = parseInt(state.espScl, 10) || 22;
+        const addr = state.i2cAddr || '0x3C';
+        const currentBytes = packPixelsToBytes(state.pixels);
+
+        if (state.driverFormat === 'u8g2') {
+          return [
+            '// Complete ESP32 U8g2 128x64 OLED Sketch',
+            '// Library Dependency: olikraus/U8g2',
+            '#include <Arduino.h>',
+            '#include <Wire.h>',
+            '#include <U8g2lib.h>',
+            '',
+            '#define I2C_SDA ' + sda,
+            '#define I2C_SCL ' + scl,
+            '',
+            'U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE, /* clock=*/ I2C_SCL, /* data=*/ I2C_SDA);',
+            '',
+            'const uint8_t PROGMEM ' + id + '[1024] = {',
+            formatByteBlock(currentBytes),
+            '};',
+            '',
+            'void setup() {',
+            '  Wire.begin(I2C_SDA, I2C_SCL, 400000UL);',
+            '  u8g2.begin();',
+            '  u8g2.clearBuffer();',
+            '  u8g2.drawXBM(0, 0, 128, 64, ' + id + ');',
+            '  u8g2.sendBuffer();',
+            '}',
+            '',
+            'void loop() {',
+            '  // Static framebuffer displayed',
+            '}'
+          ].join('\n');
+        }
+
+        return [
+          '// Complete ESP32 Adafruit_SSD1306 128x64 OLED Sketch',
+          '// Library Dependencies: Adafruit SSD1306 + Adafruit GFX Library',
+          '#include <Arduino.h>',
+          '#include <Wire.h>',
+          '#include <Adafruit_GFX.h>',
+          '#include <Adafruit_SSD1306.h>',
+          '',
+          '#define SCREEN_WIDTH  128',
+          '#define SCREEN_HEIGHT 64',
+          '#define OLED_RESET    -1',
+          '#define OLED_I2C_ADDR ' + addr,
+          '#define I2C_SDA_PIN   ' + sda,
+          '#define I2C_SCL_PIN   ' + scl,
+          '',
+          'Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);',
+          '',
+          'const uint8_t PROGMEM ' + id + '[1024] = {',
+          formatByteBlock(currentBytes),
+          '};',
+          '',
+          'void setup() {',
+          '  Serial.begin(115200);',
+          '  Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN, 400000UL);',
+          '',
+          '  if (!display.begin(SSD1306_SWITCHCAPVCC, OLED_I2C_ADDR)) {',
+          '    Serial.println(F("SSD1306 allocation failed"));',
+          '    for (;;);',
+          '  }',
+          '',
+          '  display.clearDisplay();',
+          '  display.drawBitmap(0, 0, ' + id + ', 128, 64, SSD1306_WHITE);',
+          '  display.display();',
+          '}',
+          '',
+          'void loop() {',
+          '  // Framebuffer active on OLED',
+          '}'
+        ].join('\n');
+      }
+
+      function renderCodeOutput() {
+        if (state.codeTab === 'sketch') {
+          codeOutputPre.textContent = generateSketchCode();
+        } else {
+          codeOutputPre.textContent = generateHeaderCode();
+        }
+      }
+
+      function renderAllOutputs() {
+        renderOledCanvases();
+        renderCodeOutput();
+      }
+
+      // =========================================================
+      // 5. INTERACTIVE PIXEL DRAWING (CONVERTER)
+      // =========================================================
+      let isPointerDown = false;
+      let dragStartCoord = null;
+      let tempPreviewBuffer = null;
+
+      function getCanvasPixelCoords(evt) {
+        const rect = oledInteractiveCanvas.getBoundingClientRect();
+        const scaleX = oledInteractiveCanvas.width / rect.width;
+        const scaleY = oledInteractiveCanvas.height / rect.height;
+        const cx = (evt.clientX - rect.left) * scaleX;
+        const cy = (evt.clientY - rect.top) * scaleY;
+        const x = Math.max(0, Math.min(WIDTH - 1, Math.floor(cx / ZOOM)));
+        const y = Math.max(0, Math.min(HEIGHT - 1, Math.floor(cy / ZOOM)));
+        return { x: x, y: y };
+      }
+
+      function updateCursorTelemetry(x, y) {
+        cursorCoordReadout.textContent = 'X:' + x + ', Y:' + y;
+        const page = Math.floor(y / 8);
+        const byteIndex = state.scanMode === 'horizontal'
+          ? (y * 16 + Math.floor(x / 8))
+          : (page * 128 + x);
+        cursorByteReadout.textContent = 'B:' + byteIndex + ' (P' + page + ')';
+      }
+
+      function drawBresenhamLine(buf, x0, y0, x1, y1, val) {
+        let dx = Math.abs(x1 - x0);
+        let dy = -Math.abs(y1 - y0);
+        let sx = x0 < x1 ? 1 : -1;
+        let sy = y0 < y1 ? 1 : -1;
+        let err = dx + dy;
+        while (true) {
+          if (x0 >= 0 && x0 < WIDTH && y0 >= 0 && y0 < HEIGHT) {
+            buf[y0 * WIDTH + x0] = val;
+          }
+          if (x0 === x1 && y0 === y1) break;
+          let e2 = 2 * err;
+          if (e2 >= dy) { err += dy; x0 += sx; }
+          if (e2 <= dx) { err += dx; y0 += sy; }
+        }
+      }
+
+      function drawRectOutline(buf, x0, y0, x1, y1, val) {
+        const minX = Math.min(x0, x1), maxX = Math.max(x0, x1);
+        const minY = Math.min(y0, y1), maxY = Math.max(y0, y1);
+        for (let x = minX; x <= maxX; x++) {
+          buf[minY * WIDTH + x] = val;
+          buf[maxY * WIDTH + x] = val;
+        }
+        for (let y = minY; y <= maxY; y++) {
+          buf[y * WIDTH + minX] = val;
+          buf[y * WIDTH + maxX] = val;
+        }
+      }
+
+      oledInteractiveCanvas.addEventListener('pointerdown', function(evt) {
+        evt.preventDefault();
+        const pt = getCanvasPixelCoords(evt);
+        isPointerDown = true;
+        dragStartCoord = pt;
+        if (state.undoStack.length >= 25) state.undoStack.shift();
+        state.undoStack.push(new Uint8Array(state.pixels));
+
+        if (state.activeTool === 'draw' || state.activeTool === 'erase') {
+          const bitVal = state.activeTool === 'draw' ? 1 : 0;
+          state.pixels[pt.y * WIDTH + pt.x] = bitVal;
+          renderAllOutputs();
+        } else {
+          tempPreviewBuffer = new Uint8Array(state.pixels);
+        }
+      });
+
+      oledInteractiveCanvas.addEventListener('pointermove', function(evt) {
+        const pt = getCanvasPixelCoords(evt);
+        updateCursorTelemetry(pt.x, pt.y);
+        if (!isPointerDown) return;
+
+        if (state.activeTool === 'draw' || state.activeTool === 'erase') {
+          const bitVal = state.activeTool === 'draw' ? 1 : 0;
+          drawBresenhamLine(state.pixels, dragStartCoord.x, dragStartCoord.y, pt.x, pt.y, bitVal);
+          dragStartCoord = pt;
+          renderOledCanvases();
+        } else if (state.activeTool === 'line' && tempPreviewBuffer) {
+          const preview = new Uint8Array(state.pixels);
+          drawBresenhamLine(preview, dragStartCoord.x, dragStartCoord.y, pt.x, pt.y, 1);
+          tempPreviewBuffer = preview;
+          renderOledCanvases(preview);
+        } else if (state.activeTool === 'rect' && tempPreviewBuffer) {
+          const preview = new Uint8Array(state.pixels);
+          drawRectOutline(preview, dragStartCoord.x, dragStartCoord.y, pt.x, pt.y, 1);
+          tempPreviewBuffer = preview;
+          renderOledCanvases(preview);
+        }
+      });
+
+      window.addEventListener('pointerup', function() {
+        if (!isPointerDown) return;
+        isPointerDown = false;
+        if ((state.activeTool === 'line' || state.activeTool === 'rect') && tempPreviewBuffer) {
+          state.pixels = tempPreviewBuffer;
+          tempPreviewBuffer = null;
+        }
+        renderAllOutputs();
+      });
+
+      // =========================================================
+      // 6. HUD DESIGNER LOGIC & WIDGET ENGINE (NEW)
+      // =========================================================
+      function loadHudPreset(preset) {
+        state.hudPreset = preset;
+        document.querySelectorAll('.hud-preset-btn').forEach(function(b) {
+          b.classList.toggle('tech-btn-active', b.getAttribute('data-hudpreset') === preset);
+        });
+
+        if (preset === 'temp_hum') {
+          state.sensorHardware = 'dht22';
+          sensorDriverTypeSelect.value = 'dht22';
+          state.hudWidgets = [
+            { id: 'w1', type: 'box', name: 'Header Frame', x: 0, y: 0, width: 128, height: 13 },
+            { id: 'w2', type: 'label', name: 'Title', text: 'ESP32 NODE // SENSOR', x: 4, y: 3, size: 1 },
+            { id: 'w3', type: 'sensor', name: 'Temperature Slot', varName: 'tempC', labelText: 'T:', unitText: ' C', x: 4, y: 18, size: 2 },
+            { id: 'w4', type: 'sensor', name: 'Humidity Slot', varName: 'humidity', labelText: 'H:', unitText: ' %', x: 4, y: 38, size: 1 },
+            { id: 'w5', type: 'bar', name: 'Hum Level Bar', varName: 'humidity', x: 4, y: 50, width: 120, height: 8, minVal: 0, maxVal: 100 }
+          ];
+        } else if (preset === 'weather_bme') {
+          state.sensorHardware = 'bme280';
+          sensorDriverTypeSelect.value = 'bme280';
+          state.hudWidgets = [
+            { id: 'w1', type: 'box', name: 'Outer Border', x: 0, y: 0, width: 128, height: 64 },
+            { id: 'w2', type: 'label', name: 'Title Bar', text: 'BME280 WEATHER HUD', x: 6, y: 3, size: 1 },
+            { id: 'w3', type: 'sensor', name: 'Temperature Slot', varName: 'tempC', labelText: 'TEMP:', unitText: ' C', x: 6, y: 16, size: 1 },
+            { id: 'w4', type: 'sensor', name: 'Humidity Slot', varName: 'humidity', labelText: 'HUM :', unitText: ' %', x: 6, y: 28, size: 1 },
+            { id: 'w5', type: 'sensor', name: 'Barometer Slot', varName: 'extraVal', labelText: 'PRES:', unitText: ' hPa', x: 6, y: 40, size: 1 },
+            { id: 'w6', type: 'bar', name: 'Pressure Gauge', varName: 'extraVal', x: 6, y: 52, width: 116, height: 6, minVal: 950, maxVal: 1050 }
+          ];
+        } else if (preset === 'analog_gauge') {
+          state.sensorHardware = 'analog';
+          sensorDriverTypeSelect.value = 'analog';
+          state.hudWidgets = [
+            { id: 'w1', type: 'label', name: 'Title', text: 'ADC POTENTIOMETER', x: 8, y: 4, size: 1 },
+            { id: 'w2', type: 'sensor', name: 'ADC Raw Slot', varName: 'extraVal', labelText: 'RAW: ', unitText: '', x: 8, y: 18, size: 2 },
+            { id: 'w3', type: 'bar', name: 'ADC Level Bar', varName: 'extraVal', x: 8, y: 40, width: 112, height: 16, minVal: 0, maxVal: 4095 }
+          ];
+        } else if (preset === 'battery_monitor') {
+          state.sensorHardware = 'analog';
+          sensorDriverTypeSelect.value = 'analog';
+          state.hudWidgets = [
+            { id: 'w1', type: 'label', name: 'Title', text: 'BATTERY TELEMETRY', x: 6, y: 4, size: 1 },
+            { id: 'w2', type: 'sensor', name: 'Battery % Slot', varName: 'humidity', labelText: 'CHARGE: ', unitText: ' %', x: 6, y: 20, size: 2 },
+            { id: 'w3', type: 'bar', name: 'Battery Bar', varName: 'humidity', x: 6, y: 44, width: 100, height: 12, minVal: 0, maxVal: 100 },
+            { id: 'w4', type: 'box', name: 'Bat Nipple', x: 108, y: 47, width: 4, height: 6 }
+          ];
+        }
+
+        renderHudWidgetList();
+        renderHudScreen();
+        generateHudSketchCode();
+      }
+
+      function renderHudWidgetList() {
+        hudWidgetListEl.innerHTML = '';
+        state.hudWidgets.forEach(function(w, idx) {
+          const card = document.createElement('div');
+          card.className = 'bg-chassis-950 border border-chassis-700 p-2 space-y-1.5 font-mono text-xs';
+
+          const topRow = document.createElement('div');
+          topRow.className = 'flex items-center justify-between';
+          const title = document.createElement('span');
+          title.className = 'text-white font-semibold text-[11px]';
+          title.textContent = '#' + (idx + 1) + ' ' + w.name + ' (' + w.type.toUpperCase() + ')';
+          const delBtn = document.createElement('button');
+          delBtn.type = 'button';
+          delBtn.className = 'tech-btn py-0.5 px-1.5 text-[10px] text-amber-400';
+          delBtn.textContent = 'Remove';
+          delBtn.addEventListener('click', function() {
+            state.hudWidgets.splice(idx, 1);
+            renderHudWidgetList();
+            renderHudScreen();
+            generateHudSketchCode();
+          });
+          topRow.appendChild(title);
+          topRow.appendChild(delBtn);
+          card.appendChild(topRow);
+
+          // Coordinate Row
+          const coordRow = document.createElement('div');
+          coordRow.className = 'grid grid-cols-4 gap-1.5 text-[11px]';
+
+          const xBox = document.createElement('div');
+          xBox.innerHTML = '<span class="text-slate-400">X:</span> ';
+          const xInput = document.createElement('input');
+          xInput.type = 'number';
+          xInput.min = '0';
+          xInput.max = '127';
+          xInput.value = w.x;
+          xInput.className = 'tech-input py-0.5 px-1 w-12 text-[11px] inline-block';
+          xInput.addEventListener('change', function() {
+            w.x = parseInt(xInput.value, 10) || 0;
+            renderHudScreen();
+            generateHudSketchCode();
+          });
+          xBox.appendChild(xInput);
+
+          const yBox = document.createElement('div');
+          yBox.innerHTML = '<span class="text-slate-400">Y:</span> ';
+          const yInput = document.createElement('input');
+          yInput.type = 'number';
+          yInput.min = '0';
+          yInput.max = '63';
+          yInput.value = w.y;
+          yInput.className = 'tech-input py-0.5 px-1 w-12 text-[11px] inline-block';
+          yInput.addEventListener('change', function() {
+            w.y = parseInt(yInput.value, 10) || 0;
+            renderHudScreen();
+            generateHudSketchCode();
+          });
+          yBox.appendChild(yInput);
+
+          coordRow.appendChild(xBox);
+          coordRow.appendChild(yBox);
+
+          if (w.type === 'sensor') {
+            const varBox = document.createElement('div');
+            varBox.className = 'col-span-2';
+            varBox.innerHTML = '<span class="text-slate-400">Var:</span> ';
+            const varSel = document.createElement('select');
+            varSel.className = 'tech-input py-0.5 px-1 text-[10px]';
+            varSel.innerHTML = '<option value="tempC">tempC</option><option value="humidity">humidity</option><option value="extraVal">extraVal</option>';
+            varSel.value = w.varName || 'tempC';
+            varSel.addEventListener('change', function() {
+              w.varName = varSel.value;
+              renderHudScreen();
+              generateHudSketchCode();
+            });
+            varBox.appendChild(varSel);
+            coordRow.appendChild(varBox);
+
+            // Label & Unit row
+            const textRow = document.createElement('div');
+            textRow.className = 'grid grid-cols-2 gap-1.5 pt-1 text-[11px]';
+            textRow.innerHTML = '<div><label class="text-slate-400 text-[10px]">Prefix:</label></div><div><label class="text-slate-400 text-[10px]">Unit:</label></div>';
+            const labelInput = document.createElement('input');
+            labelInput.type = 'text';
+            labelInput.value = w.labelText || '';
+            labelInput.className = 'tech-input py-0.5 px-1 w-full text-[11px]';
+            labelInput.addEventListener('input', function() {
+              w.labelText = labelInput.value;
+              renderHudScreen();
+              generateHudSketchCode();
+            });
+            textRow.children[0].appendChild(labelInput);
+
+            const unitInput = document.createElement('input');
+            unitInput.type = 'text';
+            unitInput.value = w.unitText || '';
+            unitInput.className = 'tech-input py-0.5 px-1 w-full text-[11px]';
+            unitInput.addEventListener('input', function() {
+              w.unitText = unitInput.value;
+              renderHudScreen();
+              generateHudSketchCode();
+            });
+            textRow.children[1].appendChild(unitInput);
+            card.appendChild(textRow);
+
+          } else if (w.type === 'bar') {
+            const wBox = document.createElement('div');
+            wBox.innerHTML = '<span class="text-slate-400">W:</span> ';
+            const wInput = document.createElement('input');
+            wInput.type = 'number';
+            wInput.value = w.width || 60;
+            wInput.className = 'tech-input py-0.5 px-1 w-12 text-[11px] inline-block';
+            wInput.addEventListener('change', function() {
+              w.width = parseInt(wInput.value, 10) || 10;
+              renderHudScreen();
+              generateHudSketchCode();
+            });
+            wBox.appendChild(wInput);
+
+            const hBox = document.createElement('div');
+            hBox.innerHTML = '<span class="text-slate-400">H:</span> ';
+            const hInput = document.createElement('input');
+            hInput.type = 'number';
+            hInput.value = w.height || 8;
+            hInput.className = 'tech-input py-0.5 px-1 w-12 text-[11px] inline-block';
+            hInput.addEventListener('change', function() {
+              w.height = parseInt(hInput.value, 10) || 4;
+              renderHudScreen();
+              generateHudSketchCode();
+            });
+            hBox.appendChild(hInput);
+
+            coordRow.appendChild(wBox);
+            coordRow.appendChild(hBox);
+          } else if (w.type === 'label') {
+            const lblBox = document.createElement('div');
+            lblBox.className = 'col-span-2';
+            lblBox.innerHTML = '<span class="text-slate-400">Text:</span> ';
+            const lInput = document.createElement('input');
+            lInput.type = 'text';
+            lInput.value = w.text || '';
+            lInput.className = 'tech-input py-0.5 px-1 w-full text-[11px]';
+            lInput.addEventListener('input', function() {
+              w.text = lInput.value;
+              renderHudScreen();
+              generateHudSketchCode();
+            });
+            lblBox.appendChild(lInput);
+            coordRow.appendChild(lblBox);
+          } else if (w.type === 'box') {
+            const wBox = document.createElement('div');
+            wBox.innerHTML = '<span class="text-slate-400">W:</span> ';
+            const wInput = document.createElement('input');
+            wInput.type = 'number';
+            wInput.value = w.width || 20;
+            wInput.className = 'tech-input py-0.5 px-1 w-12 text-[11px] inline-block';
+            wInput.addEventListener('change', function() {
+              w.width = parseInt(wInput.value, 10) || 5;
+              renderHudScreen();
+              generateHudSketchCode();
+            });
+            wBox.appendChild(wInput);
+
+            const hBox = document.createElement('div');
+            hBox.innerHTML = '<span class="text-slate-400">H:</span> ';
+            const hInput = document.createElement('input');
+            hInput.type = 'number';
+            hInput.value = w.height || 10;
+            hInput.className = 'tech-input py-0.5 px-1 w-12 text-[11px] inline-block';
+            hInput.addEventListener('change', function() {
+              w.height = parseInt(hInput.value, 10) || 5;
+              renderHudScreen();
+              generateHudSketchCode();
+            });
+            hBox.appendChild(hInput);
+            coordRow.appendChild(wBox);
+            coordRow.appendChild(hBox);
+          }
+
+          card.appendChild(coordRow);
+          hudWidgetListEl.appendChild(card);
+        });
+      }
+
+      function getSensorLiveValue(varName) {
+        if (varName === 'tempC') return state.simTemp;
+        if (varName === 'humidity') return state.simHum;
+        if (varName === 'extraVal') return state.simExtra;
+        return state.simTemp;
+      }
+
+      function renderHudScreen() {
+        // Clear 128x64 buffer
+        const ctx = hudPreviewCtx;
+        const actCtx = hudActualCtx;
+
+        ctx.fillStyle = '#050709';
+        ctx.fillRect(0, 0, WIDTH * ZOOM, HEIGHT * ZOOM);
+
+        actCtx.fillStyle = '#050709';
+        actCtx.fillRect(0, 0, WIDTH, HEIGHT);
+
+        const pad = state.hudShowGrid ? 1 : 0;
+        const cellSize = ZOOM - pad;
+
+        // Render virtual 128x64 buffer onto offscreen 128x64 canvas
+        const offCanvas = document.createElement('canvas');
+        offCanvas.width = WIDTH;
+        offCanvas.height = HEIGHT;
+        const octx = offCanvas.getContext('2d');
+        octx.fillStyle = '#000000';
+        octx.fillRect(0, 0, WIDTH, HEIGHT);
+        octx.fillStyle = '#FFFFFF';
+        octx.strokeStyle = '#FFFFFF';
+        octx.lineWidth = 1;
+
+        // Draw each widget onto offscreen 128x64 canvas using Adafruit GFX compatible font simulation
+        state.hudWidgets.forEach(function(w) {
+          if (w.type === 'box') {
+            octx.strokeRect(w.x + 0.5, w.y + 0.5, w.width - 1, w.height - 1);
+          } else if (w.type === 'label') {
+            const fontPx = (w.size === 2) ? 14 : 7;
+            octx.font = 'bold ' + fontPx + 'px "IBM Plex Mono", monospace';
+            octx.textBaseline = 'top';
+            octx.fillText(w.text || '', w.x, w.y);
+          } else if (w.type === 'sensor') {
+            const val = getSensorLiveValue(w.varName);
+            const valStr = typeof val === 'number' ? (val % 1 !== 0 ? val.toFixed(1) : String(val)) : String(val);
+            const fullText = (w.labelText || '') + valStr + (w.unitText || '');
+
+            const fontPx = (w.size === 2) ? 14 : 7;
+            octx.font = 'bold ' + fontPx + 'px "IBM Plex Mono", monospace';
+            octx.textBaseline = 'top';
+            octx.fillText(fullText, w.x, w.y);
+          } else if (w.type === 'bar') {
+            const val = getSensorLiveValue(w.varName);
+            const minV = w.minVal !== undefined ? w.minVal : 0;
+            const maxV = w.maxVal !== undefined ? w.maxVal : 100;
+            const frac = Math.max(0, Math.min(1, (val - minV) / (maxV - minV)));
+            octx.strokeRect(w.x + 0.5, w.y + 0.5, w.width - 1, w.height - 1);
+            const fillW = Math.max(0, Math.min(w.width - 2, Math.round((w.width - 2) * frac)));
+            if (fillW > 0) {
+              octx.fillRect(w.x + 1, w.y + 1, fillW, w.height - 2);
+            }
+          }
+        });
+
+        // Blit offscreen 128x64 pixels to main zoomed HUD canvas
+        const imgData = octx.getImageData(0, 0, WIDTH, HEIGHT).data;
+        for (let y = 0; y < HEIGHT; y++) {
+          const rowColor = getPixelColor(y);
+          ctx.fillStyle = rowColor;
+          actCtx.fillStyle = rowColor;
+
+          for (let x = 0; x < WIDTH; x++) {
+            const bit = imgData[(y * WIDTH + x) * 4] > 120 ? 1 : 0;
+            if (bit) {
+              ctx.fillRect(x * ZOOM, y * ZOOM, cellSize, cellSize);
+              actCtx.fillRect(x, y, 1, 1);
+            } else if (state.hudShowGrid) {
+              ctx.fillStyle = '#0B0F14';
+              ctx.fillRect(x * ZOOM, y * ZOOM, cellSize, cellSize);
+              ctx.fillStyle = rowColor;
+            }
+          }
+        }
+      }
+
+      function generateHudSketchCode() {
+        const pin = parseInt(sensorGpioPinInput.value, 10) || 4;
+        const sensorType = sensorDriverTypeSelect.value;
+        const sda = parseInt(state.espSda, 10) || 21;
+        const scl = parseInt(state.espScl, 10) || 22;
+        const addr = state.i2cAddr || '0x3C';
+
+        let includes = [
+          '#include <Arduino.h>',
+          '#include <Wire.h>',
+          '#include <Adafruit_GFX.h>',
+          '#include <Adafruit_SSD1306.h>'
+        ];
+
+        let sensorInit = '';
+        let sensorReadLogic = '';
+
+        if (sensorType === 'dht22') {
+          includes.push('#include <DHT.h>');
+          sensorInit = '#define DHTPIN ' + pin + '\n#define DHTTYPE DHT22\nDHT dht(DHTPIN, DHTTYPE);';
+          sensorReadLogic = '  float tempC = dht.readTemperature();\n  float humidity = dht.readHumidity();\n  float extraVal = 0;\n  if (isnan(tempC) || isnan(humidity)) {\n    tempC = 0.0;\n    humidity = 0.0;\n  }';
+        } else if (sensorType === 'bme280') {
+          includes.push('#include <Adafruit_Sensor.h>');
+          includes.push('#include <Adafruit_BME280.h>');
+          sensorInit = 'Adafruit_BME280 bme; // I2C address 0x76 or 0x77';
+          sensorReadLogic = '  float tempC = bme.readTemperature();\n  float humidity = bme.readHumidity();\n  float extraVal = bme.readPressure() / 100.0F; // hPa';
+        } else if (sensorType === 'ds18b20') {
+          includes.push('#include <OneWire.h>');
+          includes.push('#include <DallasTemperature.h>');
+          sensorInit = '#define ONE_WIRE_BUS ' + pin + '\nOneWire oneWire(ONE_WIRE_BUS);\nDallasTemperature sensors(&oneWire);';
+          sensorReadLogic = '  sensors.requestTemperatures();\n  float tempC = sensors.getTempCByIndex(0);\n  float humidity = 0.0;\n  float extraVal = 0.0;';
+        } else if (sensorType === 'analog') {
+          sensorInit = '#define SENSOR_ANALOG_PIN ' + pin;
+          sensorReadLogic = '  int rawADC = analogRead(SENSOR_ANALOG_PIN);\n  float extraVal = rawADC;\n  float tempC = (rawADC / 4095.0) * 100.0;\n  float humidity = (rawADC / 4095.0) * 100.0;';
+        } else {
+          sensorInit = '// Custom Sensor Configuration';
+          sensorReadLogic = '  float tempC = 24.5;    // Replace with your sensor reading\n  float humidity = 58.0;\n  float extraVal = 1013.0;';
+        }
+
+        let drawHudCalls = [];
+        state.hudWidgets.forEach(function(w) {
+          if (w.type === 'box') {
+            drawHudCalls.push('  display.drawRect(' + w.x + ', ' + w.y + ', ' + w.width + ', ' + w.height + ', SSD1306_WHITE);');
+          } else if (w.type === 'label') {
+            drawHudCalls.push('  display.setTextSize(' + (w.size || 1) + ');');
+            drawHudCalls.push('  display.setTextColor(SSD1306_WHITE);');
+            drawHudCalls.push('  display.setCursor(' + w.x + ', ' + w.y + ');');
+            drawHudCalls.push('  display.print(F("' + (w.text || '') + '"));');
+          } else if (w.type === 'sensor') {
+            drawHudCalls.push('  display.setTextSize(' + (w.size || 1) + ');');
+            drawHudCalls.push('  display.setTextColor(SSD1306_WHITE);');
+            drawHudCalls.push('  display.setCursor(' + w.x + ', ' + w.y + ');');
+            if (w.labelText) {
+              drawHudCalls.push('  display.print(F("' + w.labelText + '"));');
+            }
+            drawHudCalls.push('  display.print(' + (w.varName || 'tempC') + ', 1);');
+            if (w.unitText) {
+              drawHudCalls.push('  display.print(F("' + w.unitText + '"));');
+            }
+          } else if (w.type === 'bar') {
+            const minV = w.minVal !== undefined ? w.minVal : 0;
+            const maxV = w.maxVal !== undefined ? w.maxVal : 100;
+            drawHudCalls.push('  // Progress Bar for ' + (w.varName || 'tempC'));
+            drawHudCalls.push('  display.drawRect(' + w.x + ', ' + w.y + ', ' + w.width + ', ' + w.height + ', SSD1306_WHITE);');
+            drawHudCalls.push('  int fillW_' + w.id + ' = map(constrain((int)' + (w.varName || 'tempC') + ', ' + minV + ', ' + maxV + '), ' + minV + ', ' + maxV + ', 0, ' + (w.width - 2) + ');');
+            drawHudCalls.push('  if (fillW_' + w.id + ' > 0) display.fillRect(' + (w.x + 1) + ', ' + (w.y + 1) + ', fillW_' + w.id + ', ' + (w.height - 2) + ', SSD1306_WHITE);');
+          }
+        });
+
+        const sketch = [
+          '// Complete ESP32 128x64 OLED Live Sensor HUD Firmware',
+          '// Generated by OLED128x64 Utility',
+          includes.join('\n'),
+          '',
+          '#define SCREEN_WIDTH  128',
+          '#define SCREEN_HEIGHT 64',
+          '#define OLED_RESET    -1',
+          '#define OLED_I2C_ADDR ' + addr,
+          '#define I2C_SDA_PIN   ' + sda,
+          '#define I2C_SCL_PIN   ' + scl,
+          '',
+          'Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);',
+          '',
+          sensorInit,
+          '',
+          'unsigned long lastUpdateMs = 0;',
+          'const unsigned long UPDATE_INTERVAL_MS = 1000;',
+          '',
+          'void drawHUD(float tempC, float humidity, float extraVal) {',
+          '  display.clearDisplay();',
+          drawHudCalls.join('\n'),
+          '  display.display();',
+          '}',
+          '',
+          'void setup() {',
+          '  Serial.begin(115200);',
+          '  Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN, 400000UL);',
+          '',
+          '  if (!display.begin(SSD1306_SWITCHCAPVCC, OLED_I2C_ADDR)) {',
+          '    Serial.println(F("SSD1306 allocation failed"));',
+          '    for (;;);',
+          '  }',
+          '',
+          (sensorType === 'dht22' ? '  dht.begin();' : (sensorType === 'bme280' ? '  bme.begin(0x76);' : (sensorType === 'ds18b20' ? '  sensors.begin();' : ''))),
+          '  display.clearDisplay();',
+          '  display.display();',
+          '}',
+          '',
+          'void loop() {',
+          '  if (millis() - lastUpdateMs >= UPDATE_INTERVAL_MS) {',
+          '    lastUpdateMs = millis();',
+          sensorReadLogic,
+          '    drawHUD(tempC, humidity, extraVal);',
+          '  }',
+          '}'
+        ].join('\n');
+
+        hudCodeOutputPre.textContent = sketch;
+        return sketch;
+      }
+
+      // Add Widget Handlers
+      document.getElementById('addSensorSlotBtn').addEventListener('click', function() {
+        const id = 'slot_' + Date.now();
+        state.hudWidgets.push({
+          id: id,
+          type: 'sensor',
+          name: 'Dynamic Sensor Slot',
+          varName: 'tempC',
+          labelText: 'VAL:',
+          unitText: '',
+          x: 10,
+          y: 20,
+          size: 1
+        });
+        renderHudWidgetList();
+        renderHudScreen();
+        generateHudSketchCode();
+        showToast('Added Dynamic Sensor Reading Slot at X:10, Y:20');
+      });
+
+      document.getElementById('addGaugeBarBtn').addEventListener('click', function() {
+        const id = 'bar_' + Date.now();
+        state.hudWidgets.push({
+          id: id,
+          type: 'bar',
+          name: 'Dynamic Level Bar',
+          varName: 'tempC',
+          x: 10,
+          y: 35,
+          width: 80,
+          height: 8,
+          minVal: 0,
+          maxVal: 100
+        });
+        renderHudWidgetList();
+        renderHudScreen();
+        generateHudSketchCode();
+        showToast('Added Level Bar Gauge at X:10, Y:35');
+      });
+
+      // HUD Preset Buttons
+      document.querySelectorAll('.hud-preset-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          loadHudPreset(btn.getAttribute('data-hudpreset'));
+        });
+      });
+
+      // HUD Simulation Sliders
+      simTempSlider.addEventListener('input', function() {
+        state.simTemp = parseFloat(simTempSlider.value);
+        simTempDisplay.textContent = state.simTemp.toFixed(1) + ' °C';
+        renderHudScreen();
+      });
+      simHumSlider.addEventListener('input', function() {
+        state.simHum = parseInt(simHumSlider.value, 10);
+        simHumDisplay.textContent = state.simHum + ' %';
+        renderHudScreen();
+      });
+      simExtraSlider.addEventListener('input', function() {
+        state.simExtra = parseInt(simExtraSlider.value, 10);
+        simExtraDisplay.textContent = state.simExtra + ' hPa';
+        renderHudScreen();
+      });
+
+      sensorDriverTypeSelect.addEventListener('change', function() {
+        state.sensorHardware = sensorDriverTypeSelect.value;
+        generateHudSketchCode();
+      });
+      sensorGpioPinInput.addEventListener('input', function() {
+        state.sensorPin = parseInt(sensorGpioPinInput.value, 10) || 4;
+        generateHudSketchCode();
+      });
+
+      document.getElementById('hudPixelGridToggle').addEventListener('change', function(e) {
+        state.hudShowGrid = e.target.checked;
+        renderHudScreen();
+      });
+
+      document.getElementById('copyHudCodeBtn').addEventListener('click', function() {
+        const code = hudCodeOutputPre.textContent;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(code).then(function() {
+            showToast('Copied dynamic HUD Arduino sketch to clipboard.');
+          });
+        }
+      });
+
+      function downloadHudSketch() {
+        const code = generateHudSketchCode();
+        triggerTextDownload('esp32_oled_dynamic_hud.ino', code);
+      }
+      document.getElementById('downloadHudInoBtn').addEventListener('click', downloadHudSketch);
+      document.getElementById('hudExportInoBtnTop').addEventListener('click', downloadHudSketch);
+
+      // =========================================================
+      // 7. FILE UPLOAD & ACTIONS (CONVERTER)
+      // =========================================================
+      function loadImageElementToSource(img, filename) {
+        sourceCanvas.width = img.naturalWidth || img.width || 128;
+        sourceCanvas.height = img.naturalHeight || img.height || 64;
+        sourceCtx.clearRect(0, 0, sourceCanvas.width, sourceCanvas.height);
+        sourceCtx.drawImage(img, 0, 0);
+        state.sourceFileName = filename || 'uploaded_image.png';
+        state.flipH = false;
+        state.flipV = false;
+        state.rotation = 0;
+
+        document.querySelectorAll('.preset-btn').forEach(function(b) {
+          b.classList.remove('tech-btn-active');
+        });
+
+        updateSourceThumbnail();
+        processImageToFramebuffer();
+        showToast('Loaded ' + state.sourceFileName + ' (' + sourceCanvas.width + 'x' + sourceCanvas.height + ' px)');
+      }
+
+      function handleImageFile(file) {
+        if (!file || !file.type.startsWith('image/')) {
+          showToast('Please select a valid image file (PNG, JPG, WebP, BMP, SVG).');
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          const img = new Image();
+          img.onload = function() {
+            loadImageElementToSource(img, file.name);
+          };
+          img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+      }
+
+      const fileUploadInput = document.getElementById('fileUploadInput');
+      fileUploadInput.addEventListener('change', function(e) {
+        if (e.target.files && e.target.files[0]) {
+          handleImageFile(e.target.files[0]);
+        }
+      });
+
+      const dropZone = document.getElementById('dropZone');
+      dropZone.addEventListener('click', function() {
+        fileUploadInput.click();
+      });
+      dropZone.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        dropZone.classList.add('border-oled-cyan');
+      });
+      dropZone.addEventListener('dragleave', function() {
+        dropZone.classList.remove('border-oled-cyan');
+      });
+      dropZone.addEventListener('drop', function(e) {
+        e.preventDefault();
+        dropZone.classList.remove('border-oled-cyan');
+        if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) {
+          handleImageFile(e.dataTransfer.files[0]);
+        }
+      });
+
+      window.addEventListener('paste', function(e) {
+        if (!e.clipboardData || !e.clipboardData.items) return;
+        for (let i = 0; i < e.clipboardData.items.length; i++) {
+          const item = e.clipboardData.items[i];
+          if (item.type.indexOf('image') !== -1) {
+            const file = item.getAsFile();
+            handleImageFile(file);
+            break;
+          }
+        }
+      });
+
+      // Navigation Tabs
+      function switchView(viewName) {
+        state.activeView = viewName;
+        const views = ['workbench', 'hud', 'wiring', 'deploy', 'privacy', 'terms'];
+        views.forEach(function(v) {
+          const el = document.getElementById('view-' + v);
+          if (el) {
+            if (v === viewName) el.classList.remove('hidden');
+            else el.classList.add('hidden');
+          }
+        });
+        document.querySelectorAll('.nav-tab').forEach(function(btn) {
+          if (btn.getAttribute('data-nav') === viewName) {
+            btn.classList.add('tech-btn-active');
+          } else {
+            btn.classList.remove('tech-btn-active');
+          }
+        });
+
+        if (viewName === 'hud') {
+          renderHudScreen();
+          generateHudSketchCode();
+        }
+      }
+
+      document.querySelectorAll('.nav-tab').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          const target = btn.getAttribute('data-nav');
+          if (target) switchView(target);
+        });
+      });
+
+      document.getElementById('brandHomeBtn').addEventListener('click', function() {
+        switchView('workbench');
+      });
+
+      // Built-in Converter Presets
+      document.querySelectorAll('.preset-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          document.querySelectorAll('.preset-btn').forEach(function(b) {
+            b.classList.remove('tech-btn-active');
+          });
+          btn.classList.add('tech-btn-active');
+          generatePresetPattern(btn.getAttribute('data-preset'));
+        });
+      });
+
+      // Converter Geometry Controls
+      const scaleModeSelect = document.getElementById('scaleModeSelect');
+      const bgFillSelect = document.getElementById('bgFillSelect');
+
+      scaleModeSelect.addEventListener('change', function() {
+        state.scaleMode = scaleModeSelect.value;
+        processImageToFramebuffer();
+      });
+      bgFillSelect.addEventListener('change', function() {
+        state.bgFill = bgFillSelect.value;
+        processImageToFramebuffer();
+      });
+
+      document.getElementById('flipHBtn').addEventListener('click', function() {
+        state.flipH = !state.flipH;
+        processImageToFramebuffer();
+      });
+      document.getElementById('flipVBtn').addEventListener('click', function() {
+        state.flipV = !state.flipV;
+        processImageToFramebuffer();
+      });
+      document.getElementById('rotate90Btn').addEventListener('click', function() {
+        state.rotation = (state.rotation + 90) % 360;
+        processImageToFramebuffer();
+      });
+      document.getElementById('invertBtn').addEventListener('click', function() {
+        state.invert = !state.invert;
+        document.getElementById('invertBtn').classList.toggle('tech-btn-active', state.invert);
+        for (let i = 0; i < WIDTH * HEIGHT; i++) {
+          state.pixels[i] = state.pixels[i] ? 0 : 1;
+        }
+        renderAllOutputs();
+      });
+
+      document.getElementById('resetGeometryBtn').addEventListener('click', function() {
+        state.scaleMode = 'contain';
+        state.bgFill = 'black';
+        state.flipH = false;
+        state.flipV = false;
+        state.rotation = 0;
+        state.invert = false;
+        scaleModeSelect.value = 'contain';
+        bgFillSelect.value = 'black';
+        document.getElementById('invertBtn').classList.remove('tech-btn-active');
+        processImageToFramebuffer();
+      });
+
+      // Dithering & Adjustments
+      const ditherAlgoSelect = document.getElementById('ditherAlgoSelect');
+      const thresholdRange = document.getElementById('thresholdRange');
+      const brightnessRange = document.getElementById('brightnessRange');
+      const contrastRange = document.getElementById('contrastRange');
+
+      ditherAlgoSelect.addEventListener('change', function() {
+        state.ditherAlgo = ditherAlgoSelect.value;
+        processImageToFramebuffer();
+      });
+      thresholdRange.addEventListener('input', function() {
+        state.threshold = parseInt(thresholdRange.value, 10);
+        document.getElementById('thresholdVal').textContent = state.threshold;
+        processImageToFramebuffer();
+      });
+      brightnessRange.addEventListener('input', function() {
+        state.brightness = parseInt(brightnessRange.value, 10);
+        document.getElementById('brightnessVal').textContent = state.brightness;
+        processImageToFramebuffer();
+      });
+      contrastRange.addEventListener('input', function() {
+        state.contrast = parseInt(contrastRange.value, 10);
+        document.getElementById('contrastVal').textContent = state.contrast;
+        processImageToFramebuffer();
+      });
+
+      document.getElementById('resetDitherBtn').addEventListener('click', function() {
+        state.ditherAlgo = 'threshold';
+        state.threshold = 128;
+        state.brightness = 0;
+        state.contrast = 0;
+        ditherAlgoSelect.value = 'threshold';
+        thresholdRange.value = 128;
+        brightnessRange.value = 0;
+        contrastRange.value = 0;
+        document.getElementById('thresholdVal').textContent = '128';
+        document.getElementById('brightnessVal').textContent = '0';
+        document.getElementById('contrastVal').textContent = '0';
+        processImageToFramebuffer();
+      });
+
+      // OLED Panel Color Mode
+      document.querySelectorAll('.color-mode-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          document.querySelectorAll('.color-mode-btn').forEach(function(b) {
+            b.classList.remove('tech-btn-active');
+          });
+          btn.classList.add('tech-btn-active');
+          state.panelColor = btn.getAttribute('data-color');
+          renderOledCanvases();
+          renderHudScreen();
+        });
+      });
+
+      // Pixel Drawing Tools
+      document.querySelectorAll('.draw-tool-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          document.querySelectorAll('.draw-tool-btn').forEach(function(b) {
+            b.classList.remove('tech-btn-active');
+          });
+          btn.classList.add('tech-btn-active');
+          state.activeTool = btn.getAttribute('data-tool');
+        });
+      });
+
+      document.getElementById('undoPixelBtn').addEventListener('click', function() {
+        if (state.undoStack.length > 0) {
+          state.pixels = state.undoStack.pop();
+          renderAllOutputs();
+          showToast('Reverted last pixel edit.');
+        }
+      });
+
+      document.getElementById('clearScreenBtn').addEventListener('click', function() {
+        state.undoStack.push(new Uint8Array(state.pixels));
+        state.pixels = new Uint8Array(WIDTH * HEIGHT);
+        renderAllOutputs();
+        showToast('Cleared 128x64 framebuffer.');
+      });
+
+      document.getElementById('gridLinesToggle').addEventListener('change', function(e) {
+        state.showGrid = e.target.checked;
+        renderOledCanvases();
+      });
+      document.getElementById('pageGuidesToggle').addEventListener('change', function(e) {
+        state.showPageGuides = e.target.checked;
+        renderOledCanvases();
+      });
+
+      // Multi-Frame Animation Buffer
+      function renderFrameQueueStrip() {
+        frameQueueCount.textContent = String(state.frameQueue.length);
+        if (state.frameQueue.length === 0) {
+          frameQueueStrip.classList.add('hidden');
+          frameQueueStrip.innerHTML = '';
+          return;
+        }
+        frameQueueStrip.classList.remove('hidden');
+        frameQueueStrip.innerHTML = '';
+        state.frameQueue.forEach(function(framePixels, idx) {
+          const item = document.createElement('div');
+          item.className = 'bg-chassis-900 border border-chassis-700 p-1 flex items-center gap-1.5 font-mono text-[10px]';
+          const badge = document.createElement('span');
+          badge.className = 'text-oled-cyan px-1';
+          badge.textContent = '#' + idx;
+          const loadBtn = document.createElement('button');
+          loadBtn.type = 'button';
+          loadBtn.className = 'tech-btn py-0.5 px-1.5 text-[10px]';
+          loadBtn.textContent = 'Load';
+          loadBtn.addEventListener('click', function() {
+            state.pixels = new Uint8Array(framePixels);
+            renderAllOutputs();
+          });
+          const delBtn = document.createElement('button');
+          delBtn.type = 'button';
+          delBtn.className = 'tech-btn py-0.5 px-1.5 text-[10px] text-amber-400';
+          delBtn.textContent = 'X';
+          delBtn.addEventListener('click', function() {
+            state.frameQueue.splice(idx, 1);
+            renderFrameQueueStrip();
+            renderCodeOutput();
+          });
+          item.appendChild(badge);
+          item.appendChild(loadBtn);
+          item.appendChild(delBtn);
+          frameQueueStrip.appendChild(item);
+        });
+      }
+
+      document.getElementById('addFrameBtn').addEventListener('click', function() {
+        state.frameQueue.push(new Uint8Array(state.pixels));
+        renderFrameQueueStrip();
+        renderCodeOutput();
+        showToast('Added Frame #' + (state.frameQueue.length - 1) + ' to PROGMEM array queue.');
+      });
+
+      document.getElementById('clearFramesBtn').addEventListener('click', function() {
+        state.frameQueue = [];
+        renderFrameQueueStrip();
+        renderCodeOutput();
+        showToast('Cleared multi-frame queue.');
+      });
+
+      // Code Generator Options
+      const driverFormatSelect = document.getElementById('driverFormatSelect');
+      const scanModeSelect = document.getElementById('scanModeSelect');
+      const bitOrderSelect = document.getElementById('bitOrderSelect');
+      const arrayNameInput = document.getElementById('arrayNameInput');
+      const espSdaInput = document.getElementById('espSdaInput');
+      const espSclInput = document.getElementById('espSclInput');
+      const i2cAddrSelect = document.getElementById('i2cAddrSelect');
+      const byteRadixSelect = document.getElementById('byteRadixSelect');
+
+      driverFormatSelect.addEventListener('change', function() {
+        state.driverFormat = driverFormatSelect.value;
+        if (state.driverFormat === 'adafruit') {
+          state.scanMode = 'horizontal';
+          state.bitOrder = 'msb';
+        } else if (state.driverFormat === 'u8g2') {
+          state.scanMode = 'horizontal';
+          state.bitOrder = 'lsb';
+        } else if (state.driverFormat === 'espidf') {
+          state.scanMode = 'vertical';
+          state.bitOrder = 'lsb';
+        }
+        scanModeSelect.value = state.scanMode;
+        bitOrderSelect.value = state.bitOrder;
+        renderCodeOutput();
+      });
+
+      scanModeSelect.addEventListener('change', function() {
+        state.scanMode = scanModeSelect.value;
+        driverFormatSelect.value = 'custom';
+        renderCodeOutput();
+      });
+
+      bitOrderSelect.addEventListener('change', function() {
+        state.bitOrder = bitOrderSelect.value;
+        driverFormatSelect.value = 'custom';
+        renderCodeOutput();
+      });
+
+      arrayNameInput.addEventListener('input', function() {
+        state.arrayName = arrayNameInput.value;
+        renderCodeOutput();
+      });
+
+      espSdaInput.addEventListener('input', function() {
+        state.espSda = espSdaInput.value;
+        renderCodeOutput();
+        generateHudSketchCode();
+      });
+      espSclInput.addEventListener('input', function() {
+        state.espScl = espSclInput.value;
+        renderCodeOutput();
+        generateHudSketchCode();
+      });
+      i2cAddrSelect.addEventListener('change', function() {
+        state.i2cAddr = i2cAddrSelect.value;
+        renderCodeOutput();
+        generateHudSketchCode();
+      });
+      byteRadixSelect.addEventListener('change', function() {
+        state.byteRadix = byteRadixSelect.value;
+        renderCodeOutput();
+      });
+
+      document.querySelectorAll('.code-tab-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          document.querySelectorAll('.code-tab-btn').forEach(function(b) {
+            b.classList.remove('tech-btn-active');
+          });
+          btn.classList.add('tech-btn-active');
+          state.codeTab = btn.getAttribute('data-codetab');
+          renderCodeOutput();
+        });
+      });
+
+      // Clipboard & File Export Actions
+      document.getElementById('copyCodeBtn').addEventListener('click', function() {
+        const code = codeOutputPre.textContent;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(code).then(function() {
+            showToast('Copied C/C++ code to clipboard.');
+          }).catch(function() {
+            fallbackCopy(code);
+          });
+        } else {
+          fallbackCopy(code);
+        }
+      });
+
+      function fallbackCopy(text) {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        try {
+          document.execCommand('copy');
+          showToast('Copied C/C++ code to clipboard.');
+        } catch (e) {
+          showToast('Select code to copy manually.');
+        }
+        document.body.removeChild(ta);
+      }
+
+      function triggerTextDownload(filename, content) {
+        const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast('Downloaded ' + filename);
+      }
+
+      function downloadHeaderFile() {
+        const id = sanitizeIdentifier(state.arrayName);
+        triggerTextDownload(id + '.h', generateHeaderCode());
+      }
+
+      function downloadInoFile() {
+        const id = sanitizeIdentifier(state.arrayName);
+        triggerTextDownload(id + '.ino', generateSketchCode());
+      }
+
+      function downloadPngFile() {
+        const id = sanitizeIdentifier(state.arrayName);
+        const exportCanvas = document.createElement('canvas');
+        exportCanvas.width = WIDTH;
+        exportCanvas.height = HEIGHT;
+        const ectx = exportCanvas.getContext('2d');
+        for (let y = 0; y < HEIGHT; y++) {
+          for (let x = 0; x < WIDTH; x++) {
+            ectx.fillStyle = state.pixels[y * WIDTH + x] ? '#FFFFFF' : '#000000';
+            ectx.fillRect(x, y, 1, 1);
+          }
+        }
+        const url = exportCanvas.toDataURL('image/png');
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = id + '_128x64.png';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        showToast('Saved 128x64 1-bit PNG image.');
+      }
+
+      document.getElementById('downloadHeaderBtn').addEventListener('click', downloadHeaderFile);
+      document.getElementById('exportHeaderBtnTop').addEventListener('click', downloadHeaderFile);
+      document.getElementById('downloadInoBtn').addEventListener('click', downloadInoFile);
+      document.getElementById('exportPngBtnTop').addEventListener('click', downloadPngFile);
+
+      // Launch Gate & Custom Domain Logic
+      function updateLaunchGateStatus() {
+        const checks = document.querySelectorAll('.launch-check');
+        let passed = 0;
+        checks.forEach(function(c) { if (c.checked) passed++; });
+        const banner = document.getElementById('launchStatusBanner');
+        if (passed === checks.length) {
+          banner.className = 'p-3 bg-chassis-950 border border-emerald-500 font-mono text-xs text-emerald-400';
+          banner.textContent = 'STATUS: READY FOR PRODUCTION LAUNCH (5/5 pre-launch checks verified for ' + state.customDomain + ')';
+        } else {
+          banner.className = 'p-3 bg-chassis-950 border border-amber-500/60 font-mono text-xs text-amber-300';
+          banner.textContent = 'STATUS: HOLD LAUNCH (' + passed + '/' + checks.length + ' requirements verified. Complete remaining checks before launch.)';
+        }
+      }
+
+      document.querySelectorAll('.launch-check').forEach(function(c) {
+        c.addEventListener('change', updateLaunchGateStatus);
+      });
+
+      document.getElementById('applyDomainBtn').addEventListener('click', function() {
+        const val = (document.getElementById('domainNameInput').value || 'oled128x64.dev').trim();
+        state.customDomain = val;
+        document.getElementById('dnsDomainPreview').textContent = val;
+        document.querySelectorAll('.legal-domain-span').forEach(function(el) {
+          el.textContent = val;
+        });
+        updateLaunchGateStatus();
+        showToast('Applied custom domain: ' + val);
+      });
+
+      // Initialize
+      generatePresetPattern('telemetry');
+      loadHudPreset('temp_hum');
+    })();
+  </script>
+</body>
+</html>
